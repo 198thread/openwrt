@@ -1,0 +1,399 @@
+// SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+/*
+ * EcoNet EN751627 SoC device tree include
+ * EN751627 family: EN7516, EN7527, EN7561
+ * Big-endian quad-VPE MIPS 1004Kc with MIPS GIC
+ *
+ * Register map from EcoNet GPL kernel (tc3162.h):
+ *   SCU/CLK:   0x1fb00000
+ *   Chip SCU:  0x1fa20000
+ *   SPI ctrl:  0x1fa10000
+ *   Ethernet:  0x1fb50000
+ *   xHCI USB:  0x1fb90000
+ *   PCIe cfg:  0x1fb80000
+ *   GIC:       0x1f8c0000
+ *   UART:      0x1fbf0000
+ *   Timer:     0x1fbf0400 / 0x1fbe0000
+ *   GPIO:      0x1fbf0200
+ */
+
+/dts-v1/;
+
+#include <dt-bindings/interrupt-controller/mips-gic.h>
+#include <dt-bindings/clock/econet,en751221-scu.h>
+#include <dt-bindings/reset/econet,en751221-scu.h>
+#include <dt-bindings/gpio/gpio.h>
+
+/ {
+	compatible = "econet,en751627";
+	#address-cells = <1>;
+	#size-cells = <1>;
+
+	hpt_clock: clock {
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <200000000>;  /* 200 MHz */
+	};
+
+	spi_clock: spi-clock {
+		compatible = "fixed-clock";
+		#clock-cells = <0>;
+		clock-frequency = <40000000>;  /* 40 MHz */
+	};
+
+	cpus {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		cpu@0 {
+			device_type = "cpu";
+			compatible = "mips,mips1004Kc";
+			reg = <0>;
+		};
+
+		cpu@1 {
+			device_type = "cpu";
+			compatible = "mips,mips1004Kc";
+			reg = <1>;
+		};
+
+		cpu@2 {
+			device_type = "cpu";
+			compatible = "mips,mips1004Kc";
+			reg = <2>;
+		};
+
+		cpu@3 {
+			device_type = "cpu";
+			compatible = "mips,mips1004Kc";
+			reg = <3>;
+		};
+	};
+
+	cpuintc: interrupt-controller {
+		compatible = "mti,cpu-interrupt-controller";
+		interrupt-controller;
+		#address-cells = <0>;
+		#interrupt-cells = <1>;
+	};
+
+	gic: interrupt-controller@1f8c0000 {
+		compatible = "mti,gic";
+		reg = <0x1f8c0000 0x20000>;
+
+		interrupt-controller;
+		#interrupt-cells = <3>;
+
+		interrupt-parent = <&cpuintc>;
+		interrupts = <2>;
+	};
+
+	/*
+	 * EN751627 SCU uses EN751221 register layout.
+	 * The chip-scu syscon is required by the EN751221 clock driver
+	 * for regmap access to read clock divider registers.
+	 */
+	chip_scu: syscon@1fa20000 {
+		compatible = "econet,en751221-chip-scu", "syscon";
+		reg = <0x1fa20000 0x970>;
+	};
+
+	scu: system-controller@1fb00000 {
+		compatible = "econet,en751221-scu";
+		reg = <0x1fb00000 0x970>;
+		#clock-cells = <1>;
+		#reset-cells = <1>;
+	};
+
+	pcie_phy0: pcie-phy@1faf2000 {
+		compatible = "econet,en7528-pcie-phy0";
+		reg = <0x1faf2000 0x1000>;
+		#phy-cells = <0>;
+	};
+
+	pcie_phy1: pcie-phy@1fac0000 {
+		compatible = "econet,en7528-pcie-phy1";
+		reg = <0x1fac0000 0x1000>;
+		#phy-cells = <0>;
+	};
+
+	gpio0: gpio@1fbf0200 {
+		compatible = "airoha,en7523-gpio";
+		reg = <0x1fbf0204 0x4>,
+		      <0x1fbf0200 0x4>,
+		      <0x1fbf0220 0x4>,
+		      <0x1fbf0214 0x4>;
+		gpio-controller;
+		#gpio-cells = <2>;
+	};
+
+	gpio1: gpio@1fbf0270 {
+		compatible = "airoha,en7523-gpio";
+		reg = <0x1fbf0270 0x4>,
+		      <0x1fbf0260 0x4>,
+		      <0x1fbf0264 0x4>,
+		      <0x1fbf0278 0x4>;
+		gpio-controller;
+		#gpio-cells = <2>;
+	};
+
+	spi_ctrl: spi@1fa10000 {
+		compatible = "airoha,en7581-snand";
+		reg = <0x1fa10000 0x140>,
+		      <0x1fa11000 0x160>;
+
+		clocks = <&spi_clock>;
+		clock-names = "spi";
+
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		nand: nand@0 {
+			compatible = "spi-nand";
+			reg = <0>;
+			spi-max-frequency = <40000000>;
+			spi-tx-bus-width = <1>;
+			spi-rx-bus-width = <2>;
+		};
+	};
+
+	uart: serial@1fbf0000 {
+		compatible = "airoha,en7523-uart";
+		reg = <0x1fbf0000 0x30>;
+		reg-io-width = <4>;
+		reg-shift = <2>;
+
+		interrupt-parent = <&gic>;
+		interrupts = <GIC_SHARED 5 IRQ_TYPE_EDGE_RISING>;
+
+		/*
+		 * EN751627 is big-endian: UART byte is at offset 3
+		 * clock-frequency set for 115200 baud fixed rate
+		 * IRQ_TYPE_EDGE_RISING: LEVEL_HIGH causes 100k spurious fires
+		 * (THRE permanently asserted on idle TX) → kernel disables irq.
+		 */
+		clock-frequency = <1843200>;
+	};
+
+	timer_hpt: timer@1fbf0400 {
+		compatible = "econet,en7528-timer";
+		reg = <0x1fbf0400 0x14>,
+		      <0x1fbe0000 0x14>;
+
+		interrupt-parent = <&gic>;
+		interrupts = <GIC_SHARED 30 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SHARED 29 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SHARED 37 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SHARED 36 IRQ_TYPE_LEVEL_HIGH>;
+
+		clocks = <&hpt_clock>;
+	};
+
+	/*
+	 * PCIe config space. The EN751627 has 2 PCIe ports at the same
+	 * addresses as EN7528.
+	 */
+	pciecfg: pciecfg@1fb80000 {
+		compatible = "mediatek,generic-pciecfg", "syscon";
+		reg = <0x1fb80000 0x1000>;
+	};
+
+	pcie0: pcie@1fb81000 {
+		compatible = "econet,en7528-pcie";
+		device_type = "pci";
+		reg = <0x1fb81000 0x1000>;
+		reg-names = "port0";
+		linux,pci-domain = <0>;
+		#address-cells = <3>;
+		#size-cells = <2>;
+		interrupt-parent = <&gic>;
+		interrupts = <GIC_SHARED 21 IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-names = "pcie_irq";
+		clocks = <&scu EN751221_CLK_PCIE>;
+		clock-names = "sys_ck0";
+		phys = <&pcie_phy0>;
+		phy-names = "pcie-phy0";
+		bus-range = <0x00 0xff>;
+		ranges = <0x01000000 0 0x00000000 0x1f600000 0 0x00010000>,
+			 <0x82000000 0 0x20000000 0x20000000 0 0x08000000>;
+		status = "disabled";
+
+		#interrupt-cells = <1>;
+		interrupt-map-mask = <0 0 0 7>;
+		interrupt-map = <0 0 0 1 &pcie_intc0 0>,
+				<0 0 0 2 &pcie_intc0 1>,
+				<0 0 0 3 &pcie_intc0 2>,
+				<0 0 0 4 &pcie_intc0 3>;
+
+		pcie_intc0: interrupt-controller {
+			interrupt-controller;
+			#address-cells = <0>;
+			#interrupt-cells = <1>;
+		};
+
+		slot0: pcie@0,0 {
+			reg = <0x0000 0 0 0 0>;
+			#address-cells = <3>;
+			#size-cells = <2>;
+			ranges;
+		};
+	};
+
+	pcie1: pcie@1fb83000 {
+		compatible = "econet,en7528-pcie";
+		device_type = "pci";
+		reg = <0x1fb83000 0x1000>;
+		reg-names = "port1";
+		linux,pci-domain = <1>;
+		#address-cells = <3>;
+		#size-cells = <2>;
+		interrupt-parent = <&gic>;
+		interrupts = <GIC_SHARED 20 IRQ_TYPE_LEVEL_HIGH>;
+		interrupt-names = "pcie_irq";
+		clocks = <&scu EN751221_CLK_PCIE>;
+		clock-names = "sys_ck1";
+		phys = <&pcie_phy1>;
+		phy-names = "pcie-phy1";
+		bus-range = <0x00 0xff>;
+		ranges = <0x01000000 0 0x00000000 0x1f610000 0 0x00010000>,
+			 <0x82000000 0 0x28000000 0x28000000 0 0x08000000>;
+		status = "disabled";
+
+		#interrupt-cells = <1>;
+		interrupt-map-mask = <0 0 0 7>;
+		interrupt-map = <0 0 0 1 &pcie_intc1 0>,
+				<0 0 0 2 &pcie_intc1 1>,
+				<0 0 0 3 &pcie_intc1 2>,
+				<0 0 0 4 &pcie_intc1 3>;
+
+		pcie_intc1: interrupt-controller {
+			interrupt-controller;
+			#address-cells = <0>;
+			#interrupt-cells = <1>;
+		};
+
+		slot1: pcie@1,0 {
+			reg = <0x0800 0 0 0 0>;
+			#address-cells = <3>;
+			#size-cells = <2>;
+			ranges;
+		};
+	};
+
+	usb: usb@1fb90000 {
+		compatible = "mediatek,mt8173-xhci", "mediatek,mtk-xhci";
+		reg = <0x1fb90000 0x4000>,
+		      <0x1fa80700 0x100>;
+		reg-names = "mac", "ippc";
+
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		interrupt-parent = <&gic>;
+		interrupts = <GIC_SHARED 10 IRQ_TYPE_LEVEL_HIGH>;
+		usb3-lpm-capable;
+	};
+
+	ethernet: ethernet@1fb50000 {
+		compatible = "econet,en751627-eth";
+		/*
+		 * Single 64KB region covering the complete EN751627 FE register
+		 * map (struct en751221_regs = 0x10000 bytes):
+		 *   0x000-0x3ff: FE registers
+		 *   0x400-0xbff: GDM port 0
+		 *   0xc00-0x13ff: PPE + deadbeef
+		 *   0x1400-0x1bff: GDM port 1
+		 *   0x4000-0x5fff: QDMA0 + QDMA1
+		 *   0x8000-0xffff: MT7530 switch registers
+		 */
+		reg = <0x1fb50000 0x10000>;
+
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		interrupt-parent = <&gic>;
+		/*
+		 * econet_eth driver uses platform_get_irq(pdev, i) for i=0..1
+		 * (EN75_NUM_QDMA * QDMA_NUM_IRQS = 2 * 1 = 2 IRQs).
+		 * GIC_SHARED 25 = QDMA LAN (QDMA0), 31 = QDMA WAN (QDMA1).
+		 * Confirmed from stock /proc/interrupts on EN751627.
+		 */
+		interrupts = <GIC_SHARED 25 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SHARED 31 IRQ_TYPE_LEVEL_HIGH>;
+
+		resets = <&scu EN751221_FE_RST>,
+			 <&scu EN751221_FE_QDMA1_RST>,
+			 <&scu EN751221_FE_QDMA2_RST>,
+			 <&scu EN751221_GSW_RST>;
+		reset-names = "fe", "qdma0", "qdma1", "gsw";
+
+		gmac0: mac@0 {
+			compatible = "econet,eth-mac";
+			reg = <0>;
+			phy-mode = "trgmii";
+
+			fixed-link {
+				speed = <1000>;
+				full-duplex;
+				pause;
+			};
+		};
+
+		gmac1: mac@1 {
+			compatible = "econet,eth-mac";
+			reg = <1>;
+			status = "disabled";
+		};
+
+		mdio: mdio-bus {
+			compatible = "virtual,mdio-gpio";
+			gpios = <&gpio0 25 GPIO_ACTIVE_HIGH>,	/* MDC */
+			        <&gpio0 26 GPIO_ACTIVE_HIGH>;	/* MDIO */
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			switch0: switch@1f {
+				compatible = "mediatek,mt7530";
+				reg = <0x1f>;
+
+				ports {
+					#address-cells = <1>;
+					#size-cells = <0>;
+
+					port@0 {
+						reg = <0>;
+						label = "lan4";
+					};
+
+					port@1 {
+						reg = <1>;
+						label = "lan3";
+					};
+
+					port@2 {
+						reg = <2>;
+						label = "lan2";
+					};
+
+					port@3 {
+						reg = <3>;
+						label = "lan1";
+					};
+
+					port@6 {
+						reg = <6>;
+						label = "cpu";
+						ethernet = <&gmac0>;
+						phy-mode = "trgmii";
+
+						fixed-link {
+							speed = <1000>;
+							full-duplex;
+							pause;
+						};
+					};
+				};
+			};
+		};
+	};
+};

@@ -6,7 +6,8 @@ set -e
 # This is not necessary, but it makes finding the rootfs easier.
 PAD_ROOTFS_OFFSET_TO=4194304
 
-# Constant
+# Default header length. ZyXEL ZHAL bootloaders require 372 (0x174);
+# other devices (e.g. EN7528/Dasan) use 256 (0x100). Pass --hdrlen to override.
 HDRLEN=256
 
 die() {
@@ -24,6 +25,7 @@ Options:
   --version  Version string, max 31 chars (required)
   --endian   Endianness: 'be' for big endian, 'le' for little endian (default: be)
   --model    Model/platform name, max 31 chars (default: empty)
+  --hdrlen   Header length in bytes: 256 (default) or 372 (ZyXEL ZHAL)
 EOF
     exit 1
 }
@@ -56,6 +58,10 @@ while [ $# -gt 0 ]; do
             ;;
         --model)
             model="$2"
+            shift 2
+            ;;
+        --hdrlen)
+            HDRLEN="$2"
             shift 2
             ;;
         -h|--help)
@@ -193,11 +199,59 @@ tclinux_trx_hdr() {
     # Load address (CONFIG_ZBOOT_LOAD_ADDRESS)
     hex32 0x80020000
 
-    # "reserved" 128 bytes of zeros
+    # "reserved" 128 bytes of zeros  (bytes 0x80-0xFF)
     head -c 128 /dev/zero | to_hex
+
+    # Extended header (bytes 0x100-0x173) required by ZyXEL ZHAL bootloader.
+    # Only written when --hdrlen 372 is specified; other devices use hdrlen=256.
+    [ "$HDRLEN" -lt 372 ] && return
+
+    # Platform/chip string (16 bytes, zero-padded) at 0x100
+    if [ -n "$model" ]; then
+        printf '%s' "$model" | to_hex
+        head -c "$((16 - $(printf '%s' "$model" | wc -c)))" /dev/zero | to_hex
+    else
+        head -c 16 /dev/zero | to_hex
+    fi
+
+    # 8 zero bytes at 0x110
+    head -c 8 /dev/zero | to_hex
+
+    # Flag word 0x00000001 at 0x118
+    hex32 1
+
+    # SW version string (32 bytes, zero-padded) at 0x11C
+    echo "$version" | to_hex
+    head -c "$((32 - $(echo "$version" | wc -c)))" /dev/zero | to_hex
+
+    # 4 zero bytes at 0x13C
+    head -c 4 /dev/zero | to_hex
+
+    # SW version repeated (32 bytes, zero-padded) at 0x140
+    echo "$version" | to_hex
+    head -c "$((32 - $(echo "$version" | wc -c)))" /dev/zero | to_hex
+
+    # 20 zero bytes at 0x160 (includes kernel checksum placeholder + padding)
+    head -c 20 /dev/zero | to_hex
 }
 
-tclinux_trx_hdr | from_hex
-cat "$kernel"
-padding
-cat "$rootfs"
+# Build the image: header + kernel + padding + rootfs
+# Then patch offset 0x170 with JAMCRC of header bytes 0x000-0x173
+# (ZHAL bootloader validates this field before flashing)
+{
+    tclinux_trx_hdr | from_hex
+    cat "$kernel"
+    padding
+    cat "$rootfs"
+} | python3 -c "
+import sys, binascii, struct
+data = sys.stdin.buffer.read()
+hdrlen = struct.unpack('>I', data[4:8])[0]
+# Compute JAMCRC of header with checksum field zeroed (it already is)
+hdr_crc = binascii.crc32(data[:hdrlen]) & 0xFFFFFFFF
+jamcrc = hdr_crc ^ 0xFFFFFFFF
+# Write JAMCRC at offset 0x170 big-endian
+out = bytearray(data)
+struct.pack_into('>I', out, 0x170, jamcrc)
+sys.stdout.buffer.write(bytes(out))
+"

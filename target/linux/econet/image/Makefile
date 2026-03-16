@@ -9,7 +9,19 @@ endef
 define Build/tclinux-trx
   ./tclinux-trx.sh --kernel $@ --rootfs $(IMAGE_ROOTFS) \
     --version $(VERSION_DIST)-$(REVISION) --endian $(TRX_ENDIAN) \
-    $(if $(TRX_MODEL),--model $(TRX_MODEL)) > $@.new
+    $(if $(TRX_MODEL),--model $(TRX_MODEL)) \
+    $(if $(TRX_HDRLEN),--hdrlen $(TRX_HDRLEN)) > $@.new
+	mv $@.new $@
+endef
+
+# tclinux-trx variant for initramfs kernels (rootfs embedded in kernel)
+# Uses /dev/null as dummy rootfs so the kernel's built-in initramfs is used.
+define Build/tclinux-trx-initramfs
+	echo -n > $(KDIR)/empty_rootfs
+	./tclinux-trx.sh --kernel $@ --rootfs $(KDIR)/empty_rootfs \
+	  --version $(VERSION_DIST)-$(REVISION) --endian $(TRX_ENDIAN) \
+	  $(if $(TRX_MODEL),--model $(TRX_MODEL)) \
+	  $(if $(TRX_HDRLEN),--hdrlen $(TRX_HDRLEN)) > $@.new
 	mv $@.new $@
 endef
 

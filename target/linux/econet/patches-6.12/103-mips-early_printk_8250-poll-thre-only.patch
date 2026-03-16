@@ -1,0 +1,36 @@
+From: OpenWrt Community <openwrt-devel@lists.openwrt.org>
+Subject: mips: early_printk_8250: poll THRE only, not TEMT
+
+prom_putchar() in early_printk_8250.c currently polls both THRE (bit 5,
+TX holding register empty) and TEMT (bit 6, TX shift register empty)
+before writing a character. On the Airoha EN7523 UART (used in EcoNet
+EN751627 / ZyXEL EX3301-T0 and related big-endian SoCs), TEMT is not
+reliably asserted between characters.
+
+With a finite timeout, prom_putchar() times out on the TEMT check and
+silently drops the character (the write only happens inside the
+"if (timeout)" branch). The result is that all early kernel output
+is lost and the kernel appears to hang.
+
+The stock EcoNet/Airoha kernel polls only THRE, which is the correct
+condition: THRE means the TX holding register is ready to accept the
+next byte. Polling TEMT (shift register also drained) is unnecessarily
+strict and causes problems on platforms that don't assert it reliably.
+
+Change prom_putchar() to poll THRE only. This is safe for all MIPS
+platforms: a UART ready for the next byte always asserts THRE.
+
+--- a/arch/mips/kernel/early_printk_8250.c
++++ b/arch/mips/kernel/early_printk_8250.c
+@@ -42,5 +42,10 @@ void prom_putchar(char c)
+ 	timeout = serial8250_tx_timeout;
+-	bits = UART_LSR_TEMT | UART_LSR_THRE;
++	/*
++	 * Poll THRE (TX holding register empty) only. TEMT (shift register
++	 * empty, bit 6) is not reliable on all platforms (e.g. Airoha EN7523)
++	 * and polling it causes prom_putchar to drop characters on timeout.
++	 */
++	bits = UART_LSR_THRE;
+ 
+ 	do {
+ 		status = serial_in(UART_LSR);

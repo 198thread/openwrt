@@ -1,0 +1,198 @@
+// SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+/*
+ * ZyXEL EX3301-T0 device tree
+ * EcoNet EN751627 (EN7516) SoC, AX1800 WiFi 6 DSL router
+ *
+ * Hardware (verified from live device 192.168.1.1):
+ *   SoC:    EcoNet EN751627 (EN7516), MIPS 1004Kc 4-VPE, big-endian
+ *   RAM:    256 MB
+ *   Flash:  128 MB SPI NAND (Winbond W25N01G)
+ *           page=2048B oob=64B block=128KB
+ *   WiFi:   MT7915 (2.4GHz AX, PCIe slot 0) + MT7916 (5GHz AX, PCIe slot 1)
+ *   Switch: Internal 5-port GbE via MT7530 (MDIO addr 0x1f)
+ *   USB:    xHCI USB 3.0 (1 port)
+ *   MAC:    48:ED:E6:B6:5C:F0 (eth0)
+ *
+ * Partition layout verified from /proc/mtd on stock firmware.
+ * GPIO assignments from ZyXEL GPL source (not all confirmed via sysfs).
+ */
+
+#include "en751627.dtsi"
+
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/input/input.h>
+
+/ {
+	compatible = "zyxel,ex3301-t0", "econet,en751627";
+	model = "ZyXEL EX3301-T0";
+
+	aliases {
+		serial0 = &uart;
+	};
+
+	chosen {
+		bootargs = "console=ttyS0,115200n8 rootwait rootfstype=squashfs loglevel=7 panic=5 printk.devkmsg=on";
+		stdout-path = "serial0:115200n8";
+	};
+
+	memory@0 {
+		device_type = "memory";
+		reg = <0x00000000 0x10000000>;  /* 256 MB */
+	};
+
+	/* GPIO numbers from /proc/tc3162/led_def (running kernel — verified) */
+	leds {
+		compatible = "gpio-leds";
+
+		power_green {
+			label = "green:power";
+			gpios = <&gpio0 5 GPIO_ACTIVE_LOW>;
+			default-state = "on";
+		};
+
+		internet_blue {
+			label = "blue:internet";
+			gpios = <&gpio0 13 GPIO_ACTIVE_LOW>;
+		};
+
+		wifi_green {
+			label = "green:wifi";
+			gpios = <&gpio0 21 GPIO_ACTIVE_LOW>;
+		};
+
+		wifi5g_green {
+			label = "green:wifi5g";
+			gpios = <&gpio1 6 GPIO_ACTIVE_LOW>; /* pin 38 = gpio1 pin 6 (38-32) */
+		};
+	};
+
+	keys {
+		compatible = "gpio-keys";
+
+		reset {
+			label = "reset";
+			gpios = <&gpio0 0 GPIO_ACTIVE_LOW>;
+			linux,code = <KEY_RESTART>;
+		};
+
+		wps {
+			label = "wps";
+			gpios = <&gpio0 1 GPIO_ACTIVE_LOW>;
+			linux,code = <KEY_WPS_BUTTON>;
+		};
+	};
+};
+
+&uart {
+	status = "okay";
+};
+
+&spi_ctrl {
+	status = "okay";
+};
+
+&nand {
+	econet,bmt;
+	econet,enable-remap;
+	econet,can-write-factory-bbt;
+	/*
+	 * ZHAL logs "bmt pool size: 81" on boot.
+	 * en75_bmt computes: 1024 blocks * 8/100 = 81 (integer division).
+	 */
+	econet,assert-reserve-size = <81>;
+	/*
+	 * BBT table size: start with 1000 (default). If BBT reconstruction fails,
+	 * try 250 — ZyXEL firmware versions differ.
+	 */
+	econet,bbt-table-size = <1000>;
+
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		/* Layout verified from stock /proc/mtd — sequential, no gaps */
+
+		partition@0 {
+			label = "bootloader";
+			reg = <0x00000000 0x00040000>;
+			read-only;
+		};
+
+		partition@40000 {
+			label = "romfile";
+			reg = <0x00040000 0x00040000>;
+		};
+
+		partition@80000 {
+			label = "firmware";
+			reg = <0x00080000 0x02800000>;
+		};
+
+		/*
+		 * firmware1: ZHAL writes TRX here (ATUR,1). Name matches
+		 * CONFIG_MTD_SPLIT_FIRMWARE_NAME so split_firmware() calls
+		 * mtdsplit_tclinux, which creates kernel + rootfs sub-partitions.
+		 * ROOT_DEV is set by mtdcore when it sees the "rootfs" sub-partition.
+		 */
+		partition@2880000 {
+			label = "firmware1";
+			reg = <0x02880000 0x02620000>;
+		};
+
+		partition@4ea0000 {
+			label = "wwan";
+			reg = <0x04ea0000 0x00100000>;
+		};
+
+		partition@4fa0000 {
+			label = "data";
+			reg = <0x04fa0000 0x00400000>;
+		};
+
+		partition@53a0000 {
+			label = "rom-d";
+			reg = <0x053a0000 0x00100000>;
+		};
+
+		partition@54a0000 {
+			label = "misc";
+			reg = <0x054a0000 0x02000000>;
+		};
+
+		/* Factory calibration: WiFi EEPROM (MT7915/MT7916), MAC addresses */
+		partition@74a0000 {
+			label = "Factory";
+			reg = <0x074a0000 0x00080000>;
+		};
+
+		/* reservearea ends at block 942.
+		 * Blocks 943–1023 = 81 blocks are the en75_bmt pool. */
+		partition@7520000 {
+			label = "reservearea";
+			reg = <0x07520000 0x000c0000>;
+		};
+	};
+};
+
+&ethernet {
+	status = "okay";
+	/* MAC address from stock firmware (verified from ARP on 192.168.1.1) */
+	mac-address = [ 48 ED E6 B6 5C F0 ];
+};
+
+&gmac0 {
+	status = "okay";
+};
+
+&usb {
+	status = "okay";
+};
+
+&pcie0 {
+	status = "okay";  /* 14C3:7915 — MT7915 2.4GHz WiFi 6 */
+};
+
+&pcie1 {
+	status = "okay";  /* 14C3:7916 — MT7916 5GHz WiFi 6 */
+};

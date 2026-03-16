@@ -116,6 +116,16 @@ config MTD_SPLIT_MSTC_BOOT
 	depends on MTD_SPLIT_SUPPORT
 	select MTD_SPLIT
 
+config MTD_SPLIT_TCLINUX_FW
+	bool "ZyXEL/EcoNet tclinux TRX firmware parser"
+	depends on MTD_SPLIT_SUPPORT
+	select MTD_SPLIT
+	help
+	  Parser for ZyXEL/EcoNet tclinux TRX firmware images using the
+	  big-endian "2RDH" header format. Extracts the squashfs rootfs
+	  from its 4MB-aligned offset within the tclinux flash partition.
+	  Used on devices like the ZyXEL EX3301-T0.
+
 config MTD_SPLIT_OPENWRT_PROLOG
 	bool "OpenWrt executable prolog-based parser"
 	depends on MTD_SPLIT_SUPPORT

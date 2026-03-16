@@ -1,0 +1,82 @@
+From: OpenWrt Community <openwrt-devel@lists.openwrt.org>
+Subject: mips: econet: add EN751627 SoC support
+
+The EN751627 family (EN7516, EN7527, EN7561) is a big-endian quad-VPE
+MIPS 1004Kc SoC used in DSL/WiFi gateway devices such as the ZyXEL
+EX3301-T0. Unlike the big-endian EN751221 which uses a custom INTC,
+the EN751627 uses the standard MIPS GIC interrupt controller, the same
+as the little-endian EN7528, but with big-endian byte order.
+
+Key differences from existing SoCs:
+- EN751221: BE, single-core 34Kc, custom INTC
+- EN7528:   LE, dual-core 1004Kc, MIPS GIC
+- EN751627: BE, quad-VPE 1004Kc, MIPS GIC
+
+UART base address for BE: byte is at offset 3 (already handled by the
+endianness check added in the EN7528 patch for non-LE case).
+
+The EN751627 also has 4 VPEs (2 cores x 2 VPEs each) so NR_CPUS=4.
+
+--- a/arch/mips/econet/Kconfig
++++ b/arch/mips/econet/Kconfig
+@@ -41,5 +41,24 @@ choice
+ 		  The EN7528 family with dual-core MIPS 1004Kc.
+ 		  Requires MIPS_RAW_APPENDED_DTB=y for boot.
++
++	config SOC_ECONET_EN751627
++		bool "EN751627 family"
++		select COMMON_CLK
++		select CPU_BIG_ENDIAN
++		select HAVE_PCI
++		select IRQ_MIPS_CPU
++		select MIPS_CPU_SCACHE
++		select MIPS_GIC
++		select PCI_DRIVERS_GENERIC
++		select SMP
++		select SMP_UP
++		select SYS_SUPPORTS_HIGHMEM
++		select SYS_SUPPORTS_MULTITHREADING
++		select SYS_SUPPORTS_SMP
++		help
++		  The EN751627 family (EN7516, EN7527, EN7561) with big-endian
++		  quad-VPE MIPS 1004Kc and MIPS GIC. Used in DSL+WiFi gateways.
++		  Requires MIPS_RAW_APPENDED_DTB=y for boot.
+ endchoice
+ 
+ choice
+--- a/arch/mips/econet/init.c
++++ b/arch/mips/econet/init.c
+@@ -37,7 +37,17 @@ static void hw_reset(char *command)
+ /* 1. Bring up early printk. */
+ void __init prom_init(void)
+ {
+-	setup_8250_early_printk_port(UART_BASE, UART_REG_SHIFT, 0);
++#if defined(CONFIG_SOC_ECONET_EN751627)
++	/*
++	 * EN751627 (Airoha-family UART): use timeout=10000 so prom_putchar
++	 * does not underflow to 4B iterations when TEMT is not asserted.
++	 * The accompanying patch 103 fixes prom_putchar to poll THRE only,
++	 * so this timeout will not cause dropped characters either.
++	 */
++	setup_8250_early_printk_port(UART_BASE, UART_REG_SHIFT, 10000);
++#else
++	setup_8250_early_printk_port(UART_BASE, UART_REG_SHIFT, 0);
++#endif
+ 	_machine_restart = hw_reset;
+ }
+ 
+@@ -62,10 +72,13 @@ void __init device_tree_init(void)
+ 	unflatten_and_copy_device_tree();
+ 
+-	/* EN7528 dual-core: probe CM/CPC and register CPS SMP ops */
++#if defined(CONFIG_SOC_ECONET_EN7528)
++	/* EN7528 dual-core: probe CM/CPC and register CPS SMP ops */
+ 	mips_cm_probe();
+ 	mips_cpc_probe();
+ 
+ 	if (!register_cps_smp_ops())
+ 		return;
+ 
++#endif
++	/* EN751627: register UP SMP ops (VPE-based, no CM needed) */
+ 	register_up_smp_ops();

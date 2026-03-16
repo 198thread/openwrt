@@ -1,0 +1,22 @@
+// SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+
+#include "en751627.dtsi"
+
+/ {
+	compatible = "econet,en751627";
+	model = "EN751627 Generic";
+
+	chosen {
+		bootargs = "earlycon=uart8250,mmio32be,0x1fbf0000 console=ttyS0,115200n8";
+		stdout-path = "serial0:115200n8";
+	};
+
+	memory@0 {
+		device_type = "memory";
+		reg = <0x00000000 0x10000000>;
+	};
+};
+
+&uart {
+	status = "okay";
+};
