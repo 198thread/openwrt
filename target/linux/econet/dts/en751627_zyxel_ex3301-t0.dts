@@ -31,7 +31,7 @@
 	};
 
 	chosen {
-		bootargs = "console=ttyS0,115200n8 rootwait rootfstype=squashfs loglevel=7 panic=5 printk.devkmsg=on";
+		bootargs = "console=ttyS0,115200n8 rootwait rootfstype=squashfs loglevel=7 panic=5 printk.devkmsg=on clk_ignore_unused keep_bootcon";
 		stdout-path = "serial0:115200n8";
 	};
 
@@ -67,7 +67,8 @@
 	};
 
 	keys {
-		compatible = "gpio-keys";
+		compatible = "gpio-keys-polled";
+		poll-interval = <100>;
 
 		reset {
 			label = "reset";
@@ -161,9 +162,10 @@
 		};
 
 		/* Factory calibration: WiFi EEPROM (MT7915/MT7916), MAC addresses */
-		partition@74a0000 {
+		factory: partition@74a0000 {
 			label = "Factory";
 			reg = <0x074a0000 0x00080000>;
+			read-only;
 		};
 
 		/* reservearea ends at block 942.
@@ -177,12 +179,15 @@
 
 &ethernet {
 	status = "okay";
-	/* MAC address from stock firmware (verified from ARP on 192.168.1.1) */
-	mac-address = [ 48 ED E6 B6 5C F0 ];
 };
 
 &gmac0 {
 	status = "okay";
+	/* MAC address from stock firmware (verified from ARP on 192.168.1.1).
+	 * Must be on mac@0 node (gmac0), not ethernet@1fb50000, so that
+	 * en75_alloc_gdm_port() → of_get_ethdev_address(mac@0_node) finds it.
+	 */
+	mac-address = [ 48 ED E6 B6 5C F0 ];
 };
 
 &usb {
@@ -195,4 +200,20 @@
 
 &pcie1 {
 	status = "okay";  /* 14C3:7916 — MT7916 5GHz WiFi 6 */
+};
+
+&slot0 {
+	wifi@0,0 {
+		compatible = "mediatek,mt76";
+		reg = <0x0000 0 0 0 0>;
+		mediatek,mtd-eeprom = <&factory 0x0>;
+	};
+};
+
+&slot1 {
+	wifi@0,0 {
+		compatible = "mediatek,mt76";
+		reg = <0x0000 0 0 0 0>;
+		mediatek,mtd-eeprom = <&factory 0x8000>;
+	};
 };

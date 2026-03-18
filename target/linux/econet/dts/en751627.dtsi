@@ -296,16 +296,6 @@
 
 	ethernet: ethernet@1fb50000 {
 		compatible = "econet,en751627-eth";
-		/*
-		 * Single 64KB region covering the complete EN751627 FE register
-		 * map (struct en751221_regs = 0x10000 bytes):
-		 *   0x000-0x3ff: FE registers
-		 *   0x400-0xbff: GDM port 0
-		 *   0xc00-0x13ff: PPE + deadbeef
-		 *   0x1400-0x1bff: GDM port 1
-		 *   0x4000-0x5fff: QDMA0 + QDMA1
-		 *   0x8000-0xffff: MT7530 switch registers
-		 */
 		reg = <0x1fb50000 0x10000>;
 
 		#address-cells = <1>;
@@ -323,9 +313,8 @@
 
 		resets = <&scu EN751221_FE_RST>,
 			 <&scu EN751221_FE_QDMA1_RST>,
-			 <&scu EN751221_FE_QDMA2_RST>,
-			 <&scu EN751221_GSW_RST>;
-		reset-names = "fe", "qdma0", "qdma1", "gsw";
+			 <&scu EN751221_FE_QDMA2_RST>;
+		reset-names = "fe", "qdma0", "qdma1";
 
 		gmac0: mac@0 {
 			compatible = "econet,eth-mac";
@@ -345,16 +334,27 @@
 			status = "disabled";
 		};
 
+		/*
+		 * MT7530 5-port GbE switch — MCM, accessed via MMIO-backed mii_bus
+		 * registered by econet_eth driver in en75_probe(). GPIO25/26 do NOT
+		 * connect to MT7530 MDIO pins — removing virtual,mdio-gpio.
+		 * econet_eth registers en75_sw_mdio_read/write backed by switch_regs
+		 * at 0x1fb58000 (FE+0x8000). mt7530-mdio probes switch@1f on that bus.
+		 * mediatek,mcm: triggers MCM reset path in mt7530 driver.
+		 * GSW reset on switch@1f only (not in econet_eth resets list).
+		 */
 		mdio: mdio-bus {
-			compatible = "virtual,mdio-gpio";
-			gpios = <&gpio0 25 GPIO_ACTIVE_HIGH>,	/* MDC */
-			        <&gpio0 26 GPIO_ACTIVE_HIGH>;	/* MDIO */
 			#address-cells = <1>;
 			#size-cells = <0>;
 
 			switch0: switch@1f {
 				compatible = "mediatek,mt7530";
+				#address-cells = <1>;
+				#size-cells = <0>;
 				reg = <0x1f>;
+				mediatek,mcm;
+				resets = <&scu EN751221_GSW_RST>;
+				reset-names = "mcm";
 
 				ports {
 					#address-cells = <1>;

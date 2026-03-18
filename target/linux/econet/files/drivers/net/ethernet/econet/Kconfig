@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: GPL-2.0-only
+config NET_ECONET
+	tristate "EcoNet SoC Ethernet driver"
+	depends on ECONET || COMPILE_TEST
+	select NET_DSA
+	select PAGE_POOL
+	help
+	  Ethernet driver for EcoNet SoCs (EN751221, EN7528, EN751627).
+	  Supports 2 QDMA engines and 2 GDM ports with an internal
+	  MT7530 5-port GbE switch.
