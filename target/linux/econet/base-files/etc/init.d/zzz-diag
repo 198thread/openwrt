@@ -242,7 +242,22 @@ start() {
 	while IFS= read -r line; do log "  $line"; done < /proc/interrupts 2>/dev/null
 
 	# ----------------------------------------------------------------
-	# 9. LED BLINK (visual alive check)
+	# 9. UART REGISTER DUMP (for IRQ/THRE research)
+	#    Base: 0x1fbf0000, reg-shift=2 (each reg = 4 bytes)
+	#    IER=0x04, IIR=0x08, FCR=0x08, LSR=0x14, FINTLVL=0x38
+	# ----------------------------------------------------------------
+	sec "UART REGISTERS"
+	log "UART base=0x1fbf0000 (reg-shift=2, 32-bit):"
+	for reg_name_off in "IER:0x1fbf0004" "IIR:0x1fbf0008" "LCR:0x1fbf000c" "MCR:0x1fbf0010" "LSR:0x1fbf0014" "FINTLVL:0x1fbf0038"; do
+		name="${reg_name_off%%:*}"
+		addr="${reg_name_off##*:}"
+		skip=$((addr / 4))
+		val=$(dd if=/dev/mem bs=4 count=1 skip=$skip 2>/dev/null | hexdump -e '1/4 "%08x\n"' 2>/dev/null)
+		log "  $name ($addr): $val"
+	done
+
+	# ----------------------------------------------------------------
+	# 10. LED BLINK (visual alive check)
 	# ----------------------------------------------------------------
 	sec "LED BLINK"
 	if [ -d /sys/class/leds/green:power ]; then
@@ -252,5 +267,27 @@ start() {
 		log "blink OK"
 	fi
 
-	echo "=== DIAG END v53 ==="
+	# ----------------------------------------------------------------
+	# 10. NETWORK STATE (after LED blink delay — netifd should be up)
+	# ----------------------------------------------------------------
+	sec "NETWORK STATE"
+	log "uci network config:"
+	while IFS= read -r line; do log "  $line"; done < /etc/config/network 2>/dev/null
+
+	log "ip addr:"
+	ip addr 2>/dev/null | while IFS= read -r line; do log "  $line"; done
+
+	log "ip route:"
+	ip route 2>/dev/null | while IFS= read -r line; do log "  $line"; done
+
+	log "netifd processes:"
+	ps 2>/dev/null | grep -e "netifd" -e "dnsmasq" -e "dropbear" | while IFS= read -r line; do log "  $line"; done
+
+	log "phylink state (dmesg):"
+	dmesg | grep -e "Link is Up" -e "Link is Down" -e "phylink" -e "PHY.*1000" | while IFS= read -r line; do log "  $line"; done
+
+	log "eth0 carrier:"
+	dd if=/sys/class/net/eth0/carrier bs=4 count=1 2>/dev/null || log "  carrier: not readable"
+
+	echo "=== DIAG END v54 ==="
 }

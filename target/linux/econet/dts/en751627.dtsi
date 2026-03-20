@@ -158,20 +158,25 @@
 	};
 
 	uart: serial@1fbf0000 {
+		/*
+		 * UART RX strategy: airoha,en7523-uart + no interrupts →
+		 * 8250_of polled mode (serial8250_timeout timer).
+		 *
+		 * ns16550a binds to of_serial which requires IRQ (-ENXIO if
+		 * absent). airoha,en7523-uart binds to 8250_of which tolerates
+		 * irq=0: univ8250_setup_irq() → if (!port->irq) mod_timer()
+		 * → serial8250_timeout polls RX every ~10ms.
+		 *
+		 * LEVEL_HIGH (v57): 100k spurious THRE fires → irq disabled.
+		 * EDGE_RISING (v32-v56): TX works, RX deaf (THRE always high
+		 *   before RX arrives → no new rising edge → GIC never fires).
+		 * No interrupts (v59+): TX unchanged (direct write), RX polled.
+		 */
 		compatible = "airoha,en7523-uart";
 		reg = <0x1fbf0000 0x30>;
 		reg-io-width = <4>;
 		reg-shift = <2>;
 
-		interrupt-parent = <&gic>;
-		interrupts = <GIC_SHARED 5 IRQ_TYPE_EDGE_RISING>;
-
-		/*
-		 * EN751627 is big-endian: UART byte is at offset 3
-		 * clock-frequency set for 115200 baud fixed rate
-		 * IRQ_TYPE_EDGE_RISING: LEVEL_HIGH causes 100k spurious fires
-		 * (THRE permanently asserted on idle TX) → kernel disables irq.
-		 */
 		clock-frequency = <1843200>;
 	};
 
@@ -232,6 +237,7 @@
 		};
 
 		slot0: pcie@0,0 {
+			device_type = "pci";
 			reg = <0x0000 0 0 0 0>;
 			#address-cells = <3>;
 			#size-cells = <2>;
@@ -272,8 +278,9 @@
 			#interrupt-cells = <1>;
 		};
 
-		slot1: pcie@1,0 {
-			reg = <0x0800 0 0 0 0>;
+		slot1: pcie@0,0 {
+			device_type = "pci";
+			reg = <0x0000 0 0 0 0>;
 			#address-cells = <3>;
 			#size-cells = <2>;
 			ranges;
@@ -310,6 +317,9 @@
 		 */
 		interrupts = <GIC_SHARED 25 IRQ_TYPE_LEVEL_HIGH>,
 			     <GIC_SHARED 31 IRQ_TYPE_LEVEL_HIGH>;
+
+		clocks = <&scu EN751221_CLK_GSW>;
+		clock-names = "gsw";
 
 		resets = <&scu EN751221_FE_RST>,
 			 <&scu EN751221_FE_QDMA1_RST>,
@@ -356,6 +366,7 @@
 				resets = <&scu EN751221_GSW_RST>;
 				reset-names = "mcm";
 
+
 				ports {
 					#address-cells = <1>;
 					#size-cells = <0>;
@@ -363,21 +374,45 @@
 					port@0 {
 						reg = <0>;
 						label = "lan4";
+						phy-mode = "gmii";
+
+						fixed-link {
+							speed = <1000>;
+							full-duplex;
+						};
 					};
 
 					port@1 {
 						reg = <1>;
 						label = "lan3";
+						phy-mode = "gmii";
+
+						fixed-link {
+							speed = <1000>;
+							full-duplex;
+						};
 					};
 
 					port@2 {
 						reg = <2>;
 						label = "lan2";
+						phy-mode = "gmii";
+
+						fixed-link {
+							speed = <1000>;
+							full-duplex;
+						};
 					};
 
 					port@3 {
 						reg = <3>;
 						label = "lan1";
+						phy-mode = "gmii";
+
+						fixed-link {
+							speed = <1000>;
+							full-duplex;
+						};
 					};
 
 					port@6 {

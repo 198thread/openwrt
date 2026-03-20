@@ -1,0 +1,76 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# 05_ubi_rootfs_data — Format rootfs_data MTD as UBI on first boot
+#
+# EN751627 uses raw NAND with a "rootfs_data" MTD partition for the
+# overlay filesystem. fstools expects a UBI volume named "rootfs_data".
+# On first boot the partition is blank; this script formats it as UBI
+# and creates the volume so mount_root (80_mount_root) can use ubifs.
+#
+# This runs before 80_mount_root (sorted by filename).
+
+ubi_setup_rootfs_data() {
+	local mtd_name="rootfs_data"
+	local ubi_name="rootfs_data"
+
+	# Find the MTD partition number
+	local mtd_num
+	mtd_num=$(grep -m1 "\"${mtd_name}\"" /proc/mtd 2>/dev/null | cut -d: -f1 | sed 's/mtd//')
+	[ -z "$mtd_num" ] && return 0
+
+	local mtd_dev="/dev/mtd${mtd_num}"
+	[ ! -e "$mtd_dev" ] && return 0
+
+	# Check if UBI is already attached to this MTD
+	local ubi_dev
+	for d in /sys/class/ubi/ubi*; do
+		[ -f "$d/mtd_num" ] || continue
+		if [ "$(cat $d/mtd_num)" = "$mtd_num" ]; then
+			ubi_dev=$(basename "$d")
+			break
+		fi
+	done
+
+	if [ -n "$ubi_dev" ]; then
+		# Already attached — check if volume exists
+		if [ -d "/sys/class/ubi/${ubi_dev}_0" ]; then
+			return 0  # Volume exists, nothing to do
+		fi
+		# UBI attached but no volume — create it
+		ubimkvol "/dev/${ubi_dev}" -N "$ubi_name" -m 2>/dev/null && return 0
+	fi
+
+	# Not yet formatted — format as UBI then attach
+	echo "Formatting ${mtd_dev} as UBI for overlay..."
+	ubiformat -q -y "$mtd_dev" 2>/dev/null || {
+		echo "ubiformat failed on ${mtd_dev}" >&2
+		return 1
+	}
+
+	ubiattach -m "$mtd_num" 2>/dev/null || {
+		echo "ubiattach failed for MTD${mtd_num}" >&2
+		return 1
+	}
+
+	# Find the newly attached UBI device
+	for d in /sys/class/ubi/ubi*; do
+		[ -f "$d/mtd_num" ] || continue
+		if [ "$(cat $d/mtd_num)" = "$mtd_num" ]; then
+			ubi_dev=$(basename "$d")
+			break
+		fi
+	done
+
+	[ -z "$ubi_dev" ] && return 1
+
+	ubimkvol "/dev/${ubi_dev}" -N "$ubi_name" -m 2>/dev/null || {
+		echo "ubimkvol failed on /dev/${ubi_dev}" >&2
+		return 1
+	}
+
+	echo "UBI volume '${ubi_name}' created on ${mtd_dev}"
+	return 0
+}
+
+boot_hook_add preinit_main ubi_setup_rootfs_data

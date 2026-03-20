@@ -19,7 +19,7 @@ The EN751627 also has 4 VPEs (2 cores x 2 VPEs each) so NR_CPUS=4.
 
 --- a/arch/mips/econet/Kconfig
 +++ b/arch/mips/econet/Kconfig
-@@ -41,5 +41,24 @@ choice
+@@ -41,5 +41,28 @@ choice
  		  The EN7528 family with dual-core MIPS 1004Kc.
  		  Requires MIPS_RAW_APPENDED_DTB=y for boot.
 +
@@ -29,12 +29,17 @@ The EN751627 also has 4 VPEs (2 cores x 2 VPEs each) so NR_CPUS=4.
 +		select CPU_BIG_ENDIAN
 +		select HAVE_PCI
 +		select IRQ_MIPS_CPU
++		select MIPS_CM
++		select MIPS_CPC
++		select MIPS_CPS
 +		select MIPS_CPU_SCACHE
 +		select MIPS_GIC
++		select MIPS_MT_SMP
 +		select PCI_DRIVERS_GENERIC
 +		select SMP
 +		select SMP_UP
 +		select SYS_SUPPORTS_HIGHMEM
++		select SYS_SUPPORTS_MIPS_CPS
 +		select SYS_SUPPORTS_MULTITHREADING
 +		select SYS_SUPPORTS_SMP
 +		help
