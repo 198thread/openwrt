@@ -36,6 +36,7 @@ rootfs=""
 version=""
 endian="be"
 model=""
+chip=""
 
 # Parse named arguments
 while [ $# -gt 0 ]; do
@@ -62,6 +63,10 @@ while [ $# -gt 0 ]; do
             ;;
         --hdrlen)
             HDRLEN="$2"
+            shift 2
+            ;;
+        --chip)
+            chip="$2"
             shift 2
             ;;
         -h|--help)
@@ -179,25 +184,22 @@ tclinux_trx_hdr() {
     # customer version
     head -c 32 /dev/zero | to_hex
 
-    # kernel length
+    # kernel length at 0x050
     hex32 "$kernel_len"
 
-    # rootfs length
-    hex32 "$padded_rootfs_len"
+    # flags at 0x054: upper16 = hdrlen, lower16 = part_count (4)
+    # Stock: 0x01740004. BL2 does not check this, but stock parsers do.
+    hex32 $(( ($HDRLEN << 16) | 4 ))
 
-    # romfile length (0)
+    # romfile length (0) at 0x058
     hex32 0
 
-    # model (32 bytes, zero-padded)
-    if [ -n "$model" ]; then
-        printf '%s' "$model" | to_hex
-        head -c "$((32 - $(printf '%s' "$model" | wc -c)))" /dev/zero | to_hex
-    else
-        head -c 32 /dev/zero | to_hex
-    fi
+    # 32 zero bytes at 0x05c (boardinfo/reserved — stock has ASCII "35 122 0\n" here,
+    # but BL2 does not require it)
+    head -c 32 /dev/zero | to_hex
 
-    # Load address (CONFIG_ZBOOT_LOAD_ADDRESS)
-    hex32 0x80020000
+    # Load address at 0x07c: 0 = use BL2 default 0x80020000 (matches stock)
+    hex32 0
 
     # "reserved" 128 bytes of zeros  (bytes 0x80-0xFF)
     head -c 128 /dev/zero | to_hex
@@ -206,10 +208,14 @@ tclinux_trx_hdr() {
     # Only written when --hdrlen 372 is specified; other devices use hdrlen=256.
     [ "$HDRLEN" -lt 372 ] && return
 
-    # Platform/chip string (16 bytes, zero-padded) at 0x100
-    if [ -n "$model" ]; then
-        printf '%s' "$model" | to_hex
-        head -c "$((16 - $(printf '%s' "$model" | wc -c)))" /dev/zero | to_hex
+    # Chip/SoC ID string (16 bytes, zero-padded) at 0x100
+    # Must be the SoC chip model (e.g. "en7516"), NOT the device name.
+    # Stock mtd4-tclinux.bin has "en7516" here. BL2 does not check this field
+    # (ATDC disables model check), but stock parsers and ATUR validation may use it.
+    # Pass via --chip; fall back to empty if not provided.
+    if [ -n "$chip" ]; then
+        printf '%s' "$chip" | to_hex
+        head -c "$((16 - $(printf '%s' "$chip" | wc -c)))" /dev/zero | to_hex
     else
         head -c 16 /dev/zero | to_hex
     fi
@@ -217,22 +223,28 @@ tclinux_trx_hdr() {
     # 8 zero bytes at 0x110
     head -c 8 /dev/zero | to_hex
 
-    # Flag word 0x00000001 at 0x118
-    hex32 1
+    # Flag word (build_date placeholder) at 0x118 — stock has 0x0405050d
+    # Use 0 here; BL2 does not validate this field
+    hex32 0
 
-    # SW version string (32 bytes, zero-padded) at 0x11C
-    echo "$version" | to_hex
-    head -c "$((32 - $(echo "$version" | wc -c)))" /dev/zero | to_hex
+    # slot_flag at 0x11c: 0 = slave/slot1 (we flash with ATUR,1), 1 = primary
+    # Stock mtd7 (slot1) has 0x00000000 here. We always produce slot1 images.
+    hex32 0
 
-    # 4 zero bytes at 0x13C
-    head -c 4 /dev/zero | to_hex
+    # 4 zero bytes padding at 0x120 (stock has 0x00000000 here before version)
+    hex32 0
 
-    # SW version repeated (32 bytes, zero-padded) at 0x140
-    echo "$version" | to_hex
-    head -c "$((32 - $(echo "$version" | wc -c)))" /dev/zero | to_hex
+    # SW version string (28 bytes, zero-padded) at 0x124
+    # Stock version "V5.50(ABVY.4)C0" is 16 bytes; we use 28 to stay within field.
+    printf '%s' "$version" | to_hex
+    head -c "$((28 - $(printf '%s' "$version" | wc -c)))" /dev/zero | to_hex
 
-    # 20 zero bytes at 0x160 (includes kernel checksum placeholder + padding)
-    head -c 20 /dev/zero | to_hex
+    # SW version repeated (28 bytes, zero-padded) at 0x140
+    printf '%s' "$version" | to_hex
+    head -c "$((28 - $(printf '%s' "$version" | wc -c)))" /dev/zero | to_hex
+
+    # 24 zero bytes at 0x15c..0x173 (JAMCRC placeholder at 0x170 patched later by python)
+    head -c 24 /dev/zero | to_hex
 }
 
 # Build the image: header + kernel + padding + rootfs

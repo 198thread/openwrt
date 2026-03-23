@@ -11,8 +11,9 @@ define Device/zyxel_ex3301-t0
   DEVICE_VENDOR := ZyXEL
   DEVICE_MODEL := EX3301-T0
   DEVICE_PACKAGES := kmod-mt7915e kmod-mt7916-firmware mt7915-firmware \
-		     kmod-usb3 kmod-usb-ledtrig-usbport
+		     kmod-usb3 kmod-usb-ledtrig-usbport kmod-gpio-button-hotplug
   TRX_MODEL := EX3301-T0
+  TRX_CHIP := en7516
   TRX_HDRLEN := 372
   IMAGES := tclinux.trx sysupgrade.bin
   IMAGE/tclinux.trx := append-kernel | lzma | tclinux-trx

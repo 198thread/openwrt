@@ -31,7 +31,7 @@
 	};
 
 	chosen {
-		bootargs = "console=ttyS0,115200n8 rootwait rootfstype=squashfs loglevel=7 panic=5 printk.devkmsg=on clk_ignore_unused keep_bootcon";
+		bootargs = "console=ttyS0,115200n8 rootwait rootfstype=squashfs loglevel=7 panic=5 printk.devkmsg=on clk_ignore_unused keep_bootcon ipv6.disable=1 dyndbg=+p";
 		stdout-path = "serial0:115200n8";
 	};
 

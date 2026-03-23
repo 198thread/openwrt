@@ -1,0 +1,30 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# EN751627 / ZyXEL EX3301-T0 network board config.
+# Called by /bin/board_detect during first-boot config_generate.
+# Produces /etc/board.json consumed by /bin/config_generate.
+#
+# EX3301-T0 port layout (MT7530 DSA):
+#   lan1-lan4 : MT7530 user ports 0-3 (labelled in DTS)
+#   eth0      : CPU uplink (trgmii port 6, always up)
+#   No dedicated WAN port — all 4 ports are LAN by default.
+
+. /lib/functions/uci-defaults.sh
+
+board_config_update
+
+board=$(board_name)
+
+case "$board" in
+zyxel,ex3301-t0)
+	ucidef_set_interface_lan "lan1 lan2 lan3 lan4"
+	;;
+*)
+	ucidef_set_interface_lan "eth0"
+	;;
+esac
+
+board_config_flush
+
+exit 0

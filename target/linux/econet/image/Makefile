@@ -10,6 +10,7 @@ define Build/tclinux-trx
   ./tclinux-trx.sh --kernel $@ --rootfs $(IMAGE_ROOTFS) \
     --version $(VERSION_DIST)-$(REVISION) --endian $(TRX_ENDIAN) \
     $(if $(TRX_MODEL),--model $(TRX_MODEL)) \
+    $(if $(TRX_CHIP),--chip $(TRX_CHIP)) \
     $(if $(TRX_HDRLEN),--hdrlen $(TRX_HDRLEN)) > $@.new
 	mv $@.new $@
 endef
@@ -21,6 +22,7 @@ define Build/tclinux-trx-initramfs
 	./tclinux-trx.sh --kernel $@ --rootfs $(KDIR)/empty_rootfs \
 	  --version $(VERSION_DIST)-$(REVISION) --endian $(TRX_ENDIAN) \
 	  $(if $(TRX_MODEL),--model $(TRX_MODEL)) \
+	  $(if $(TRX_CHIP),--chip $(TRX_CHIP)) \
 	  $(if $(TRX_HDRLEN),--hdrlen $(TRX_HDRLEN)) > $@.new
 	mv $@.new $@
 endef

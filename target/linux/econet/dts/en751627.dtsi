@@ -312,11 +312,13 @@
 		/*
 		 * econet_eth driver uses platform_get_irq(pdev, i) for i=0..1
 		 * (EN75_NUM_QDMA * QDMA_NUM_IRQS = 2 * 1 = 2 IRQs).
-		 * GIC_SHARED 25 = QDMA LAN (QDMA0), 31 = QDMA WAN (QDMA1).
-		 * Confirmed from stock /proc/interrupts on EN751627.
+		 * From GPL tc3182_int_source.h columns are: INTC_num, Linux_IRQ_num
+		 *   QDMA_LAN0_INTR: INTC 28, Linux IRQ 21 → GIC_SHARED = LinuxIRQ-1 = 20
+		 *   QDMA_WAN0_INTR: INTC 32, Linux IRQ 22 → GIC_SHARED = LinuxIRQ-1 = 21
+		 * GIC_SHARED 27 = XPON_PHY_INTR (wrong), GIC_SHARED 31 = BUS_TOUT_INT (wrong).
 		 */
-		interrupts = <GIC_SHARED 25 IRQ_TYPE_LEVEL_HIGH>,
-			     <GIC_SHARED 31 IRQ_TYPE_LEVEL_HIGH>;
+		interrupts = <GIC_SHARED 20 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SHARED 21 IRQ_TYPE_LEVEL_HIGH>;
 
 		clocks = <&scu EN751221_CLK_GSW>;
 		clock-names = "gsw";

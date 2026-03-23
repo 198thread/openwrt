@@ -2,292 +2,103 @@
 START=99
 ENABLED=1
 
-# All output goes to /dev/kmsg (bypasses procd tty hangup)
-# NOTE: busybox grep does NOT support -E with | alternation (SIGILL).
-#       Always use multiple -e flags instead.
+# Focused diagnostic: econet_eth probe -EINVAL + IRQ/reset state
+# v55: stripped to essentials — probe failure, regs, IRQs, eth0 state
 log() { echo "$*"; }
 sec() { echo; echo "=== $* ==="; }
 
 start() {
 	exec > /dev/kmsg 2>&1
-	echo "=== DIAG START v53 ==="
+	echo "=== DIAG START v55 ==="
 
 	# ----------------------------------------------------------------
-	# 1. SWITCH / MDIO BUS
-	#    v52: DTS has no virtual,mdio-gpio; econet_eth registers MMIO mii_bus.
-	#    Expect: switch@1f binds on econet-sw-mdio bus; "MT7530 adapts as MCM".
-	#    Expect: DSA lan1-lan4 + wan ports appear in /sys/class/net.
+	# 1. ECONET ETH PROBE FAILURE
 	# ----------------------------------------------------------------
-	sec "SWITCH / MDIO"
-	log "kernel msgs (mt7530/mdio/switch):"
-	dmesg | grep -ie "mt7530" -e "mdio" -e "chip" -e "gsw" -e "switch" | while IFS= read -r line; do log "  $line"; done
+	sec "ECONET PROBE"
 
-	log "mdio_bus devices:"
-	for f in /sys/bus/mdio_bus/devices/*; do
-		[ -d "$f" ] || continue
-		compat=""
-		[ -f "$f/of_node/compatible" ] && compat=$(dd if="$f/of_node/compatible" bs=64 count=1 2>/dev/null)
-		drv="unbound"
-		[ -L "$f/driver" ] && drv=$(readlink "$f/driver" 2>/dev/null | sed 's|.*/||')
-		log "  ${f##*/}: compatible=$compat driver=$drv"
-	done
+	log "probe result (dmesg):"
+	dmesg | grep -F "econet_eth" -e "1fb50000" | while IFS= read -r line; do log "  $line"; done
 
-	log "switch DT props:"
-	sw=/proc/device-tree/ethernet@1fb50000/mdio-bus/switch@1f
-	if [ -d "$sw" ]; then
-		log "  compatible: $(dd if=$sw/compatible bs=64 count=1 2>/dev/null)"
-		[ -f "$sw/mediatek,mcm" ] && log "  mediatek,mcm: present" || log "  mediatek,mcm: ABSENT"
-		[ -f "$sw/resets" ]        && log "  resets: $(hexdump -C $sw/resets 2>/dev/null | head -1)" || log "  resets: ABSENT"
+	log "driver sysfs:"
+	drv=/sys/bus/platform/drivers/econet_eth
+	if [ -d "$drv" ]; then
+		log "  exists; bound devices:"
+		for f in "$drv"/*/; do [ -L "$f" ] && log "    $(basename $f)"; done
 	else
-		log "  switch@1f DT node: NOT FOUND"
+		log "  ABSENT"
 	fi
 
-	log "mdio-bus DT props:"
-	mb=/proc/device-tree/ethernet@1fb50000/mdio-bus
-	if [ -d "$mb" ]; then
-		[ -f "$mb/compatible" ] && log "  compatible: $(dd if=$mb/compatible bs=64 count=1 2>/dev/null)" || log "  compatible: ABSENT (good for MCM)"
-		[ -f "$mb/gpios" ]      && log "  gpios: present (mdio-gpio path active)" || log "  gpios: ABSENT (good — no gpio-bitbang)"
-	fi
-
-	log "GSW reset sysfs:"
-	for f in /sys/kernel/debug/reset*; do [ -f "$f" ] && log "  $f"; done 2>/dev/null || true
-
-	log "DSA net ports:"
-	for f in /sys/class/net/*; do
-		ifname="${f##*/}"
-		[ "$ifname" = "lo" ] && continue
-		operstate=$(dd if="$f/operstate" bs=32 count=1 2>/dev/null)
-		mac=$(dd if="$f/address" bs=18 count=1 2>/dev/null)
-		log "  $ifname: operstate=$operstate mac=$mac"
-	done
-
-	# ----------------------------------------------------------------
-	# 2. ECONET ETH + mac@0
-	#    v52: mac-address moved to &gmac0 (mac@0 node).
-	#    Expect: eth0 mac = 48:ed:e6:b6:5c:f0 (not random).
-	# ----------------------------------------------------------------
-	sec "ECONET ETH"
-	log "kernel msgs:"
-	dmesg | grep -ie "econet_eth" -e "econet.eth" -e "en751627.eth" | while IFS= read -r line; do log "  $line"; done
-
-	log "ethernet driver binding:"
-	for f in /sys/bus/platform/drivers/econet_eth/*; do
-		[ -L "$f" ] && log "  BOUND: ${f##*/}"
-	done
-
-	log "mac@0 child device:"
-	macdev=/sys/bus/platform/devices/1fb50000.ethernet:mac@0
-	if [ -d "$macdev" ]; then
-		log "  exists in sysfs"
-		[ -L "$macdev/driver" ] && log "  driver: $(readlink $macdev/driver 2>/dev/null | sed 's|.*/||')" || log "  driver: UNBOUND"
-		[ -f "$macdev/of_node/compatible" ] && log "  compatible: $(dd if=$macdev/of_node/compatible bs=64 count=1 2>/dev/null)"
+	log "platform device 1fb50000.ethernet:"
+	pdev=/sys/bus/platform/devices/1fb50000.ethernet
+	if [ -d "$pdev" ]; then
+		[ -L "$pdev/driver" ] && log "  BOUND: $(readlink $pdev/driver 2>/dev/null | sed 's|.*/||')" || log "  UNBOUND"
+		log "  power/runtime_status: $(cat $pdev/power/runtime_status 2>/dev/null)"
 	else
-		log "  mac@0: NOT in sysfs"
+		log "  NOT in sysfs"
 	fi
 
-	log "DT MAC address:"
-	for node in /proc/device-tree/ethernet@1fb50000/mac-address \
-	            /proc/device-tree/ethernet@1fb50000/mac@0/mac-address; do
-		[ -f "$node" ] && { log "  $node:"; hexdump -C "$node" 2>/dev/null | head -1; }
-	done
+	# ----------------------------------------------------------------
+	# 2. RESET / CLK STATE
+	# ----------------------------------------------------------------
+	sec "RESET REGS (SCU)"
 
-	log "IRQ counts (econet/qdma):"
-	grep -e "econet" -e "qdma" /proc/interrupts 2>/dev/null | while IFS= read -r line; do log "  $line"; done
+	# EN751221 SCU: RST_CTRL1=0x1fb00834 (FE_RST=bit21, QDMA1=bit1, QDMA2=bit2)
+	#               RST_CTRL2=0x1fb00830
+	log "RST_CTRL1 (0x1fb00834): bit21=FE_RST bit1=QDMA1 bit2=QDMA2"
+	val=$(dd if=/dev/mem bs=4 count=1 skip=$(( 0x1fb00834 / 4 )) 2>/dev/null | hexdump -e '1/4 "%08x\n"')
+	log "  = $val"
+	log "RST_CTRL2 (0x1fb00830):"
+	val=$(dd if=/dev/mem bs=4 count=1 skip=$(( 0x1fb00830 / 4 )) 2>/dev/null | hexdump -e '1/4 "%08x\n"')
+	log "  = $val"
 
-	log "eth0 stats:"
-	dd if=/sys/class/net/eth0/carrier bs=4 count=1 2>/dev/null && log "  (carrier)" || log "  carrier: error"
-	dd if=/sys/class/net/eth0/statistics/rx_packets bs=16 count=1 2>/dev/null && log "  (rx_packets)" || true
+	log "reset/clk early dmesg:"
+	dmesg | grep -F "reset" -e "clk" -e "clock" | grep -F "[    0." -e "[    1." -e "[    2." -e "[    3." -e "[    4." -e "[    5." | \
+		while IFS= read -r line; do log "  $line"; done
 
 	# ----------------------------------------------------------------
-	# 3. WIFI / mt76
-	#    v52: Try explicit insmod to bypass SIGILL-on-exit modprobe issue.
-	#    Expect: modules load (insmod syscall completes before exit SIGILL).
-	# ----------------------------------------------------------------
-	sec "WIFI"
-	log "kernel msgs (mt76/mt7915/eeprom/pcie-wifi):"
-	dmesg | grep -ie "mt76" -e "mt7915" -e "eeprom" -e "pcie.*wifi" -e "wifi.*pcie" | while IFS= read -r line; do log "  $line"; done
-
-	log "PCIe devices:"
-	for f in /sys/bus/pci/devices/*; do
-		[ -d "$f" ] || continue
-		vendor=$(dd if="$f/vendor" bs=8 count=1 2>/dev/null)
-		device=$(dd if="$f/device" bs=8 count=1 2>/dev/null)
-		drv="unbound"
-		[ -L "$f/driver" ] && drv=$(readlink "$f/driver" 2>/dev/null | sed 's|.*/||')
-		log "  $(basename $f): vendor=$vendor device=$device driver=$drv"
-	done
-
-	log "wifi@0,0 DT props (slot0):"
-	wf0=/proc/device-tree/pcie@1fb81000/pcie@0,0/wifi@0,0
-	if [ -d "$wf0" ]; then
-		[ -f "$wf0/compatible" ] && log "  compatible: $(dd if=$wf0/compatible bs=64 count=1 2>/dev/null)"
-		[ -f "$wf0/mediatek,mtd-eeprom" ] && log "  mtd-eeprom: $(hexdump -C $wf0/mediatek,mtd-eeprom 2>/dev/null | head -1)" || log "  mtd-eeprom: ABSENT"
-	else
-		log "  slot0 wifi DT: not found (check pcie path)"
-	fi
-
-	log "mt76 kmod on filesystem:"
-	for p in /lib/modules/*/mt7915e.ko /lib/modules/*/mt76.ko; do
-		[ -f "$p" ] && log "  PRESENT: $p" || true
-	done
-
-	log "explicit insmod (bypass modprobe SIGILL-on-exit):"
-	for m in cfg80211 mac80211 mt76 mt7915e; do
-		kpath=""
-		for p in /lib/modules/*/${m}.ko; do
-			[ -f "$p" ] && kpath="$p" && break
-		done
-		if [ -n "$kpath" ]; then
-			insmod "$kpath" 2>/dev/null
-			[ -d "/sys/module/$m" ] && log "  insmod $m: OK" || log "  insmod $m: FAILED"
-		else
-			log "  insmod $m: .ko not found"
-		fi
-	done
-
-	log "modules loaded:"
-	for m in mt7915e mt7915 mt76 mac80211 cfg80211; do
-		[ -d "/sys/module/$m" ] && log "  $m: LOADED" || log "  $m: not loaded"
-	done
-
-	log "ieee80211 phys:"
-	found=0
-	for f in /sys/class/ieee80211/*; do
-		[ -d "$f" ] && { log "  phy: ${f##*/}"; found=1; }
-	done
-	[ "$found" = 0 ] && log "  none"
-
-	# ----------------------------------------------------------------
-	# 4. MTD / FACTORY EEPROM
-	#    mtd11 = Factory (512KB). Magic 0x7915 = MT7915 calibration data.
-	#    v52: MTD_CHAR=y confirmed. Check if factory accessible.
-	# ----------------------------------------------------------------
-	sec "MTD / FACTORY"
-	log "MTD map:"
-	while IFS= read -r line; do log "  $line"; done < /proc/mtd 2>/dev/null
-
-	log "mtd char devs:"
-	for i in 0 1 2 3 4 5 6 7 8 9 10 11 12; do
-		[ -c /dev/mtd$i ] && log "  /dev/mtd$i: present" || log "  /dev/mtd$i: missing"
-	done
-
-	log "mtd11 first 32 bytes (Factory magic):"
-	dd if=/dev/mtd11 bs=32 count=1 2>/dev/null | hexdump -C 2>/dev/null \
-		|| log "  READ FAILED (no char dev or MTD_CHAR not set)"
-
-	log "factory DT label check:"
-	for p in /proc/device-tree/nand@1e000000/partitions/partition*/label; do
-		[ -f "$p" ] && { v=$(dd if="$p" bs=32 count=1 2>/dev/null); [ "$v" = "Factory" ] && log "  Factory label found: $p"; }
-	done
-
-	# ----------------------------------------------------------------
-	# 5. GPIO KEYS
-	#    v52: keys compatible changed to gpio-keys-polled (no IRQ needed).
-	#    Expect: keys driver BOUND, /sys/class/input/input0 present.
-	# ----------------------------------------------------------------
-	sec "GPIO KEYS / INPUT"
-	log "kernel msgs:"
-	dmesg | grep -ie "gpio.key" -e "input:" -e "gpio-keys" | while IFS= read -r line; do log "  $line"; done
-
-	log "keys DT node:"
-	kn=/proc/device-tree/keys
-	if [ -d "$kn" ]; then
-		[ -f "$kn/compatible" ] && log "  compatible: $(dd if=$kn/compatible bs=32 count=1 2>/dev/null)"
-		for btn in "$kn"/*/; do
-			[ -d "$btn" ] || continue
-			label=""
-			[ -f "$btn/label" ] && label=$(dd if="$btn/label" bs=32 count=1 2>/dev/null)
-			gpios=""
-			[ -f "$btn/gpios" ] && gpios=$(hexdump -C "$btn/gpios" 2>/dev/null | head -1)
-			ints=""
-			[ -f "$btn/interrupts" ] && ints=$(hexdump -C "$btn/interrupts" 2>/dev/null | head -1)
-			log "  btn $label: gpios=$gpios interrupts=$ints"
-		done
-	else
-		log "  /proc/device-tree/keys: NOT FOUND"
-	fi
-
-	log "input devices:"
-	found=0
-	for f in /sys/class/input/input*; do
-		[ -d "$f" ] || continue
-		name=$(dd if="$f/name" bs=64 count=1 2>/dev/null)
-		log "  ${f##*/}: $name"
-		found=1
-	done
-	[ "$found" = 0 ] && log "  none"
-
-	# ----------------------------------------------------------------
-	# 6. UNBOUND PLATFORM DEVICES
-	# ----------------------------------------------------------------
-	sec "UNBOUND DEVICES"
-	for f in /sys/bus/platform/devices/*; do
-		[ -d "$f" ] || continue
-		[ -L "$f/driver" ] || log "  UNBOUND: ${f##*/}"
-	done | head -25
-
-	# ----------------------------------------------------------------
-	# 7. KERNEL ERROR SUMMARY
-	#    Using fixed strings (-F) to avoid busybox grep SIGILL on -E
-	# ----------------------------------------------------------------
-	sec "KERNEL ERRORS"
-	dmesg | grep -F "error -" | while IFS= read -r line; do log "  $line"; done
-	dmesg | grep -F "probe with driver" | grep -F "failed" | while IFS= read -r line; do log "  $line"; done
-	dmesg | grep -F "can't be supported" | while IFS= read -r line; do log "  $line"; done
-
-	# ----------------------------------------------------------------
-	# 8. INTERRUPT TABLE
+	# 3. IRQ TABLE
 	# ----------------------------------------------------------------
 	sec "INTERRUPTS"
+
+	log "DT interrupts for ethernet@1fb50000:"
+	intnode=/proc/device-tree/ethernet@1fb50000
+	[ -f "$intnode/interrupts" ] && hexdump -C "$intnode/interrupts" 2>/dev/null | while IFS= read -r line; do log "  $line"; done \
+		|| log "  NOT FOUND"
+
+	log "/proc/interrupts (full):"
 	while IFS= read -r line; do log "  $line"; done < /proc/interrupts 2>/dev/null
 
 	# ----------------------------------------------------------------
-	# 9. UART REGISTER DUMP (for IRQ/THRE research)
-	#    Base: 0x1fbf0000, reg-shift=2 (each reg = 4 bytes)
-	#    IER=0x04, IIR=0x08, FCR=0x08, LSR=0x14, FINTLVL=0x38
+	# 4. MANUAL RE-BIND ATTEMPT
 	# ----------------------------------------------------------------
-	sec "UART REGISTERS"
-	log "UART base=0x1fbf0000 (reg-shift=2, 32-bit):"
-	for reg_name_off in "IER:0x1fbf0004" "IIR:0x1fbf0008" "LCR:0x1fbf000c" "MCR:0x1fbf0010" "LSR:0x1fbf0014" "FINTLVL:0x1fbf0038"; do
-		name="${reg_name_off%%:*}"
-		addr="${reg_name_off##*:}"
-		skip=$((addr / 4))
-		val=$(dd if=/dev/mem bs=4 count=1 skip=$skip 2>/dev/null | hexdump -e '1/4 "%08x\n"' 2>/dev/null)
-		log "  $name ($addr): $val"
+	sec "RE-BIND"
+	log "echo 1fb50000.ethernet > bind:"
+	echo "1fb50000.ethernet" > /sys/bus/platform/drivers/econet_eth/bind 2>&1
+	sleep 1
+	[ -L "/sys/bus/platform/devices/1fb50000.ethernet/driver" ] && log "  SUCCESS" || log "  FAILED"
+	log "dmesg tail after rebind:"
+	dmesg | tail -15 | while IFS= read -r line; do log "  $line"; done
+
+	# ----------------------------------------------------------------
+	# 5. ETH0 STATE
+	# ----------------------------------------------------------------
+	sec "ETH0"
+	for f in /sys/class/net/*; do
+		ifname="${f##*/}"
+		[ "$ifname" = "lo" ] && continue
+		operstate=$(cat "$f/operstate" 2>/dev/null)
+		carrier=$(cat "$f/carrier" 2>/dev/null)
+		log "  $ifname: operstate=$operstate carrier=$carrier"
 	done
-
-	# ----------------------------------------------------------------
-	# 10. LED BLINK (visual alive check)
-	# ----------------------------------------------------------------
-	sec "LED BLINK"
-	if [ -d /sys/class/leds/green:power ]; then
-		echo 0 > /sys/class/leds/green:power/brightness 2>/dev/null
-		i=0; while [ $i -lt 80000 ]; do i=$((i+1)); done
-		echo 255 > /sys/class/leds/green:power/brightness 2>/dev/null
-		log "blink OK"
-	fi
-
-	# ----------------------------------------------------------------
-	# 10. NETWORK STATE (after LED blink delay — netifd should be up)
-	# ----------------------------------------------------------------
-	sec "NETWORK STATE"
-	log "uci network config:"
-	while IFS= read -r line; do log "  $line"; done < /etc/config/network 2>/dev/null
-
 	log "ip addr:"
 	ip addr 2>/dev/null | while IFS= read -r line; do log "  $line"; done
 
-	log "ip route:"
-	ip route 2>/dev/null | while IFS= read -r line; do log "  $line"; done
+	# ----------------------------------------------------------------
+	# 6. KERNEL ERRORS SUMMARY
+	# ----------------------------------------------------------------
+	sec "KERNEL ERRORS"
+	dmesg | grep -F "error -" | while IFS= read -r line; do log "  $line"; done
+	dmesg | grep -F "failed with error" | while IFS= read -r line; do log "  $line"; done
 
-	log "netifd processes:"
-	ps 2>/dev/null | grep -e "netifd" -e "dnsmasq" -e "dropbear" | while IFS= read -r line; do log "  $line"; done
-
-	log "phylink state (dmesg):"
-	dmesg | grep -e "Link is Up" -e "Link is Down" -e "phylink" -e "PHY.*1000" | while IFS= read -r line; do log "  $line"; done
-
-	log "eth0 carrier:"
-	dd if=/sys/class/net/eth0/carrier bs=4 count=1 2>/dev/null || log "  carrier: not readable"
-
-	echo "=== DIAG END v54 ==="
+	echo "=== DIAG END v55 ==="
 }

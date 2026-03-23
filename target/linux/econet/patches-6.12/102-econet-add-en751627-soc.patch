@@ -70,18 +70,29 @@ The EN751627 also has 4 VPEs (2 cores x 2 VPEs each) so NR_CPUS=4.
  	_machine_restart = hw_reset;
  }
  
-@@ -62,10 +72,13 @@ void __init device_tree_init(void)
+@@ -62,10 +72,24 @@ void __init device_tree_init(void)
  	unflatten_and_copy_device_tree();
  
 -	/* EN7528 dual-core: probe CM/CPC and register CPS SMP ops */
 +#if defined(CONFIG_SOC_ECONET_EN7528)
-+	/* EN7528 dual-core: probe CM/CPC and register CPS SMP ops */
++	/* EN7528: probe CM + CPC, register CPS SMP ops */
  	mips_cm_probe();
  	mips_cpc_probe();
- 
+
  	if (!register_cps_smp_ops())
  		return;
- 
+
++#elif defined(CONFIG_SOC_ECONET_EN751627)
++	/*
++	 * EN751627: CM (GCR 0x1f8e0000) present and required to map the GIC.
++	 * CPC is NOT probed — accessing CPC registers hangs the EN751627 SoC.
++	 * register_cps_smp_ops() uses CM to bring up secondary VPEs (VPE1-3).
++	 * Without this, only VPE0 boots (register_up_smp_ops = uniprocessor).
++	 */
++	mips_cm_probe();
++
++	if (!register_cps_smp_ops())
++		return;
++
 +#endif
-+	/* EN751627: register UP SMP ops (VPE-based, no CM needed) */
  	register_up_smp_ops();

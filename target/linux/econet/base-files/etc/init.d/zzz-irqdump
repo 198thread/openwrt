@@ -1,0 +1,19 @@
+#!/bin/sh /etc/rc.common
+START=10
+STOP=99
+ENABLED=1
+
+# Dumps /proc/interrupts to kmsg at START=10 (before T=68s crash).
+# IRQ names to look for: econet_eth-0.0 (QDMA0/GIC_SHARED 25) and econet_eth-1.0 (QDMA1/GIC_SHARED 31)
+# If count=0 after packets sent, GIC_SHARED number in DTS is wrong.
+
+kmsg() {
+	printf '<4>IRQDUMP: %s\n' "$*" > /dev/kmsg
+}
+
+start() {
+	sleep 5
+	kmsg "=== /proc/interrupts at T+5s ==="
+	while IFS= read -r line; do kmsg "$line"; done < /proc/interrupts
+	kmsg "=== END /proc/interrupts ==="
+}
