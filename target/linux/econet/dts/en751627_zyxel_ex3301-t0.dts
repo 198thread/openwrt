@@ -147,7 +147,12 @@
 		};
 
 		partition@4fa0000 {
-			label = "data";
+			/*
+			 * Stock label is "data" but kernel ubi_auto_attach()
+			 * probes any MTD named "ubi" or "data" for UBI magic.
+			 * Rename to avoid the benign but noisy UBI error.
+			 */
+			label = "nvdata";
 			reg = <0x04fa0000 0x00400000>;
 		};
 

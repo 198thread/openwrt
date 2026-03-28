@@ -1,104 +1,24 @@
 #!/bin/sh /etc/rc.common
-START=99
-ENABLED=1
+START=50
+USE_PROCD=1
 
-# Focused diagnostic: econet_eth probe -EINVAL + IRQ/reset state
-# v55: stripped to essentials — probe failure, regs, IRQs, eth0 state
-log() { echo "$*"; }
-sec() { echo; echo "=== $* ==="; }
+# zzz-diag v110 — GIC_SH_PEND + INTC probe + ftrace setup.
+#
+# v109 root cause under investigation:
+#   IRQ 22 (GIC_SHARED 20, QDMA LAN0) fires 0 times after all int_enable fixes.
+#   Unknown: does the QDMA output signal actually reach GIC input 20?
+#
+# v110 new diagnostics:
+#   Section 7: GIC_SH_PEND (0x1f8c0480) — bit 20 tells us if QDMA reaches GIC at all.
+#   Section 8: INTC probe (0x1fb40000-10) — checks intermediate interrupt controller.
+#   Section 9: ftrace — traces en75_irq_handler call path if CONFIG_FUNCTION_TRACER=y.
+#
+# Respawn fix: USE_PROCD=1 + respawn 0 0 1 — prevents procd from restarting this script.
+# (v109 bug: without USE_PROCD the script was restarted 4+ times causing nested log output)
 
-start() {
-	exec > /dev/kmsg 2>&1
-	echo "=== DIAG START v55 ==="
-
-	# ----------------------------------------------------------------
-	# 1. ECONET ETH PROBE FAILURE
-	# ----------------------------------------------------------------
-	sec "ECONET PROBE"
-
-	log "probe result (dmesg):"
-	dmesg | grep -F "econet_eth" -e "1fb50000" | while IFS= read -r line; do log "  $line"; done
-
-	log "driver sysfs:"
-	drv=/sys/bus/platform/drivers/econet_eth
-	if [ -d "$drv" ]; then
-		log "  exists; bound devices:"
-		for f in "$drv"/*/; do [ -L "$f" ] && log "    $(basename $f)"; done
-	else
-		log "  ABSENT"
-	fi
-
-	log "platform device 1fb50000.ethernet:"
-	pdev=/sys/bus/platform/devices/1fb50000.ethernet
-	if [ -d "$pdev" ]; then
-		[ -L "$pdev/driver" ] && log "  BOUND: $(readlink $pdev/driver 2>/dev/null | sed 's|.*/||')" || log "  UNBOUND"
-		log "  power/runtime_status: $(cat $pdev/power/runtime_status 2>/dev/null)"
-	else
-		log "  NOT in sysfs"
-	fi
-
-	# ----------------------------------------------------------------
-	# 2. RESET / CLK STATE
-	# ----------------------------------------------------------------
-	sec "RESET REGS (SCU)"
-
-	# EN751221 SCU: RST_CTRL1=0x1fb00834 (FE_RST=bit21, QDMA1=bit1, QDMA2=bit2)
-	#               RST_CTRL2=0x1fb00830
-	log "RST_CTRL1 (0x1fb00834): bit21=FE_RST bit1=QDMA1 bit2=QDMA2"
-	val=$(dd if=/dev/mem bs=4 count=1 skip=$(( 0x1fb00834 / 4 )) 2>/dev/null | hexdump -e '1/4 "%08x\n"')
-	log "  = $val"
-	log "RST_CTRL2 (0x1fb00830):"
-	val=$(dd if=/dev/mem bs=4 count=1 skip=$(( 0x1fb00830 / 4 )) 2>/dev/null | hexdump -e '1/4 "%08x\n"')
-	log "  = $val"
-
-	log "reset/clk early dmesg:"
-	dmesg | grep -F "reset" -e "clk" -e "clock" | grep -F "[    0." -e "[    1." -e "[    2." -e "[    3." -e "[    4." -e "[    5." | \
-		while IFS= read -r line; do log "  $line"; done
-
-	# ----------------------------------------------------------------
-	# 3. IRQ TABLE
-	# ----------------------------------------------------------------
-	sec "INTERRUPTS"
-
-	log "DT interrupts for ethernet@1fb50000:"
-	intnode=/proc/device-tree/ethernet@1fb50000
-	[ -f "$intnode/interrupts" ] && hexdump -C "$intnode/interrupts" 2>/dev/null | while IFS= read -r line; do log "  $line"; done \
-		|| log "  NOT FOUND"
-
-	log "/proc/interrupts (full):"
-	while IFS= read -r line; do log "  $line"; done < /proc/interrupts 2>/dev/null
-
-	# ----------------------------------------------------------------
-	# 4. MANUAL RE-BIND ATTEMPT
-	# ----------------------------------------------------------------
-	sec "RE-BIND"
-	log "echo 1fb50000.ethernet > bind:"
-	echo "1fb50000.ethernet" > /sys/bus/platform/drivers/econet_eth/bind 2>&1
-	sleep 1
-	[ -L "/sys/bus/platform/devices/1fb50000.ethernet/driver" ] && log "  SUCCESS" || log "  FAILED"
-	log "dmesg tail after rebind:"
-	dmesg | tail -15 | while IFS= read -r line; do log "  $line"; done
-
-	# ----------------------------------------------------------------
-	# 5. ETH0 STATE
-	# ----------------------------------------------------------------
-	sec "ETH0"
-	for f in /sys/class/net/*; do
-		ifname="${f##*/}"
-		[ "$ifname" = "lo" ] && continue
-		operstate=$(cat "$f/operstate" 2>/dev/null)
-		carrier=$(cat "$f/carrier" 2>/dev/null)
-		log "  $ifname: operstate=$operstate carrier=$carrier"
-	done
-	log "ip addr:"
-	ip addr 2>/dev/null | while IFS= read -r line; do log "  $line"; done
-
-	# ----------------------------------------------------------------
-	# 6. KERNEL ERRORS SUMMARY
-	# ----------------------------------------------------------------
-	sec "KERNEL ERRORS"
-	dmesg | grep -F "error -" | while IFS= read -r line; do log "  $line"; done
-	dmesg | grep -F "failed with error" | while IFS= read -r line; do log "  $line"; done
-
-	echo "=== DIAG END v55 ==="
+start_service() {
+	procd_open_instance
+	procd_set_param command /bin/sh /etc/zzz-diag-run.sh
+	procd_set_param respawn 0 0 1
+	procd_close_instance
 }

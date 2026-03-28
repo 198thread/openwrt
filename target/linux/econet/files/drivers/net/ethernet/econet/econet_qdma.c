@@ -417,6 +417,12 @@ static irqreturn_t en75_irq_handler(int irq_num, void *dev_instance)
 
 		irq->irqmask[i] &= ~disable_int;
 		en75_wreg(irq->irqmask[i], irq->mask_reg[i]);
+		/* Flush: guarantee int_enable write commits before the GIC
+		 * re-enables delivery (matches set_irqmask flush at line 343).
+		 * Without this, the posted write may not reach the QDMA before
+		 * handle_level_irq re-enables the GIC line, causing a storm on
+		 * LEVEL_HIGH or a missed re-arm on EDGE_RISING. */
+		en75_rreg(irq->mask_reg[i]);
 	}
 
 	return IRQ_HANDLED;
@@ -1058,6 +1064,23 @@ int en75_qdma_use(struct en75_qdma *qdma)
 
 	for (i = 0; i < ARRAY_SIZE(qdma->q_tx_done); i++)
 		napi_enable(&qdma->q_tx_done[i].napi);
+
+	/* Re-arm RX DONE bits in int_enable after napi_enable().
+	 *
+	 * en75_init_final() enables int_enable at probe time. The GIC
+	 * delivers the IRQ immediately (int_status is combinationally HIGH
+	 * from empty ring state). en75_irq_handler clears the DONE bits
+	 * from irqmask and writes int_enable without waiting for napi_enable
+	 * (NAPI is not yet enabled at probe). By the time ndo_open() calls
+	 * this function, the DONE bits are gone and no further IRQ is ever
+	 * delivered. Re-enable them here now that NAPI is ready.
+	 */
+	for (i = 0; i < ARRAY_SIZE(qdma->q_rx); i++) {
+		union en75_irq_purpose purpose = IRQ_PURPOSE(DONE, RX, i);
+		union irq_bit b = en751221_irq_bit(purpose);
+
+		en75_qdma_set_irqmask(qdma, b, true);
+	}
 
 	return 0;
 }

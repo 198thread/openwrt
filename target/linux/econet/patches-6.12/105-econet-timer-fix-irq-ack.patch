@@ -1,0 +1,31 @@
+From: Kervin Pursoty <kpursoty@proton.me>
+Subject: clocksource: timer-econet-en751221: fix IRQ ack to disarm compare register
+
+cevt_interrupt() acks the compare register by writing the current count
+value back to compare:
+
+  iowrite32(ioread32(reg_count(cpu)), reg_compare(cpu));
+
+On EN751627 this is a posted write through KSEG1 (uncached). By the time
+the write completes, the free-running counter has already advanced past
+the written value, so the pending bit re-asserts immediately. The result
+is a tight interrupt storm on CPU0 that starves all other IRQs, including
+QDMA (ethernet) which never gets a chance to deliver.
+
+Fix: ack by writing U32_MAX to compare (effectively disarming it), then
+let the next set_next_event() arm it with the correct future value. This
+is consistent with how cevt_dev_init() initialises the register.
+
+Signed-off-by: Kervin Pursoty <kpursoty@proton.me>
+--- a/drivers/clocksource/timer-econet-en751221.c
++++ b/drivers/clocksource/timer-econet-en751221.c
+@@ -85,7 +85,8 @@
+ 	if (!cevt_is_pending(cpu))
+ 		return IRQ_NONE;
+
+-	iowrite32(ioread32(reg_count(cpu)), reg_compare(cpu));
++	/* Disarm compare to prevent re-fire on posted-write; set_next_event() re-arms. */
++	iowrite32(U32_MAX, reg_compare(cpu));
+ 	dev->event_handler(dev);
+ 	return IRQ_HANDLED;
+ }
