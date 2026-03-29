@@ -210,12 +210,7 @@
 		#address-cells = <3>;
 		#size-cells = <2>;
 		interrupt-parent = <&gic>;
-		/*
-		 * tc3182_int_source.h: PCIE_0_INT irqNum=21, Source=23
-		 * GIC_SHARED = Source - 2 = 21... but confirmed working at GIC_SHARED 22.
-		 * GIC_SHARED 20/21 are used by QDMA_LAN0/WAN0 (ethernet).
-		 */
-		interrupts = <GIC_SHARED 22 IRQ_TYPE_LEVEL_HIGH>;
+		interrupts = <GIC_SHARED 23 IRQ_TYPE_LEVEL_HIGH>;
 		interrupt-names = "pcie_irq";
 		clocks = <&scu EN751221_CLK_PCIE>;
 		clock-names = "sys_ck0";
@@ -257,12 +252,7 @@
 		#address-cells = <3>;
 		#size-cells = <2>;
 		interrupt-parent = <&gic>;
-		/*
-		 * tc3182_int_source.h: PCIE_A_INT irqNum=20, Source=24
-		 * GIC_SHARED = Source - 1 = 23
-		 * GIC_SHARED 20/21 are used by QDMA_LAN0/WAN0 (ethernet).
-		 */
-		interrupts = <GIC_SHARED 23 IRQ_TYPE_LEVEL_HIGH>;
+		interrupts = <GIC_SHARED 24 IRQ_TYPE_LEVEL_HIGH>;
 		interrupt-names = "pcie_irq";
 		clocks = <&scu EN751221_CLK_PCIE>;
 		clock-names = "sys_ck1";
@@ -318,21 +308,13 @@
 
 		interrupt-parent = <&gic>;
 		/*
-		 * econet_eth driver uses platform_get_irq(pdev, i) for i=0..1
-		 * (EN75_NUM_QDMA * QDMA_NUM_IRQS = 2 * 1 = 2 IRQs).
-		 *
-		 * Confirmed from v81/v82 boot logs (/proc/interrupts):
-		 *   hwirq 27 = econet_eth-0.0  → intSrc = 27 - GIC_NUM_LOCAL_INTRS(7) = 20
-		 *   hwirq 28 = econet_eth-1.0  → intSrc = 28 - GIC_NUM_LOCAL_INTRS(7) = 21
-		 * So: QDMA_LAN0 = GIC_SHARED 20, QDMA_WAN0 = GIC_SHARED 21.
-		 *
-		 * Type LEVEL_HIGH: QDMA int_status is combinatorially asserted while the
-		 * RX ring has pending descriptors. An EDGE type would never re-fire after
-		 * the first probe-time assertion (signal stays high → no new 0→1 edge).
-		 * cm_probe v111 confirmed GIC_SH_PEND[20]=0 with EDGE_RISING (no latch).
+		 * From EcoNet GPL kernel (cjdelisle/EcoNet-IOPSYS-GPL-5.4.55):
+		 *   arch/mips/econet/irq.c gic_intr_map[] + tc3182_int_source.h:
+		 *   QDMA_LAN0_INTR: GIC Source=21 -> GIC_SHARED 21 -> hwirq 28
+		 *   QDMA_WAN0_INTR: GIC Source=22 -> GIC_SHARED 22 -> hwirq 29
 		 */
-		interrupts = <GIC_SHARED 20 IRQ_TYPE_LEVEL_HIGH>,
-			     <GIC_SHARED 21 IRQ_TYPE_LEVEL_HIGH>;
+		interrupts = <GIC_SHARED 21 IRQ_TYPE_LEVEL_HIGH>,
+			     <GIC_SHARED 22 IRQ_TYPE_LEVEL_HIGH>;
 
 		clocks = <&scu EN751221_CLK_GSW>;
 		clock-names = "gsw";
