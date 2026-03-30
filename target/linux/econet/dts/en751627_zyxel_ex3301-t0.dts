@@ -14,24 +14,28 @@
  *   MAC:    48:ED:E6:B6:5C:F0 (eth0)
  *
  * Partition layout verified from /proc/mtd on stock firmware.
- * GPIO assignments from ZyXEL GPL source (not all confirmed via sysfs).
+ * GPIO assignments verified from /sys/kernel/debug/gpio on running OpenWrt.
  */
 
 #include "en751627.dtsi"
 
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/input/input.h>
+#include <dt-bindings/leds/common.h>
 
 / {
 	compatible = "zyxel,ex3301-t0", "econet,en751627";
 	model = "ZyXEL EX3301-T0";
 
 	aliases {
+		led-boot = &led_power;
+		led-failsafe = &led_power;
+		led-upgrade = &led_power;
 		serial0 = &uart;
 	};
 
 	chosen {
-		bootargs = "console=ttyS0,115200n8 rootwait rootfstype=squashfs loglevel=7 panic=5 printk.devkmsg=on clk_ignore_unused keep_bootcon ipv6.disable=1 dyndbg=+p";
+		bootargs = "console=ttyS0,115200n8 rootwait rootfstype=squashfs loglevel=7 panic=5 clk_ignore_unused ipv6.disable=1";
 		stdout-path = "serial0:115200n8";
 	};
 
@@ -40,29 +44,33 @@
 		reg = <0x00000000 0x10000000>;  /* 256 MB */
 	};
 
-	/* GPIO numbers from /proc/tc3162/led_def (running kernel — verified) */
+	/* GPIO pin numbers verified from /sys/kernel/debug/gpio on live device */
 	leds {
 		compatible = "gpio-leds";
 
-		power_green {
-			label = "green:power";
+		led_power: led-0 {
+			color = <LED_COLOR_ID_GREEN>;
+			function = LED_FUNCTION_POWER;
 			gpios = <&gpio0 5 GPIO_ACTIVE_LOW>;
 			default-state = "on";
 		};
 
-		internet_blue {
-			label = "blue:internet";
+		led-1 {
+			color = <LED_COLOR_ID_BLUE>;
+			function = LED_FUNCTION_WAN_ONLINE;
 			gpios = <&gpio0 13 GPIO_ACTIVE_LOW>;
 		};
 
-		wifi_green {
-			label = "green:wifi";
+		led-2 {
+			color = <LED_COLOR_ID_GREEN>;
+			function = LED_FUNCTION_WLAN_2GHZ;
 			gpios = <&gpio0 21 GPIO_ACTIVE_LOW>;
 		};
 
-		wifi5g_green {
-			label = "green:wifi5g";
-			gpios = <&gpio1 6 GPIO_ACTIVE_LOW>; /* pin 38 = gpio1 pin 6 (38-32) */
+		led-3 {
+			color = <LED_COLOR_ID_GREEN>;
+			function = LED_FUNCTION_WLAN_5GHZ;
+			gpios = <&gpio1 6 GPIO_ACTIVE_LOW>; /* gpio1 pin 6 = SoC pin 38 */
 		};
 	};
 
@@ -101,10 +109,6 @@
 	 * en75_bmt computes: 1024 blocks * 8/100 = 81 (integer division).
 	 */
 	econet,assert-reserve-size = <81>;
-	/*
-	 * BBT table size: start with 1000 (default). If BBT reconstruction fails,
-	 * try 250 — ZyXEL firmware versions differ.
-	 */
 	econet,bbt-table-size = <1000>;
 
 	partitions {
@@ -150,7 +154,7 @@
 			/*
 			 * Stock label is "data" but kernel ubi_auto_attach()
 			 * probes any MTD named "ubi" or "data" for UBI magic.
-			 * Rename to avoid the benign but noisy UBI error.
+			 * Renamed to avoid benign but noisy UBI probe error.
 			 */
 			label = "nvdata";
 			reg = <0x04fa0000 0x00400000>;
@@ -166,15 +170,31 @@
 			reg = <0x054a0000 0x02000000>;
 		};
 
-		/* Factory calibration: WiFi EEPROM (MT7915/MT7916), MAC addresses */
+		/*
+		 * Factory: combined WiFi EEPROM for MT7915 (2.4GHz) and MT7916
+		 * (5GHz). Both radios share a single blob starting at offset 0x0.
+		 * The mt7915e driver identifies each radio from the PCIe device ID
+		 * and reads the appropriate calibration sub-record from the blob.
+		 * Only 0x0000-0x7FFF contains valid data; 0x8000 onward is 0xFF.
+		 */
 		factory: partition@74a0000 {
 			label = "Factory";
 			reg = <0x074a0000 0x00080000>;
 			read-only;
+
+			nvmem-layout {
+				compatible = "fixed-layout";
+				#address-cells = <1>;
+				#size-cells = <1>;
+
+				eeprom_factory_0: eeprom@0 {
+					reg = <0x0 0x1000>;
+				};
+			};
 		};
 
 		/* reservearea ends at block 942.
-		 * Blocks 943–1023 = 81 blocks are the en75_bmt pool. */
+		 * Blocks 943-1023 = 81 blocks are the en75_bmt pool. */
 		partition@7520000 {
 			label = "reservearea";
 			reg = <0x07520000 0x000c0000>;
@@ -188,9 +208,10 @@
 
 &gmac0 {
 	status = "okay";
-	/* MAC address from stock firmware (verified from ARP on 192.168.1.1).
-	 * Must be on mac@0 node (gmac0), not ethernet@1fb50000, so that
-	 * en75_alloc_gdm_port() → of_get_ethdev_address(mac@0_node) finds it.
+	/*
+	 * MAC address burned into hardware (verified from ARP on 192.168.1.1).
+	 * Must be on mac@0 node so en75_alloc_gdm_port() finds it via
+	 * of_get_ethdev_address(mac@0_node).
 	 */
 	mac-address = [ 48 ED E6 B6 5C F0 ];
 };
@@ -211,7 +232,9 @@
 	wifi@0,0 {
 		compatible = "mediatek,mt76";
 		reg = <0x0000 0 0 0 0>;
-		mediatek,mtd-eeprom = <&factory 0x0>;
+		nvmem-cells = <&eeprom_factory_0>;
+		nvmem-cell-names = "eeprom";
+		ieee80211-freq-limit = <2400000 2500000>;
 	};
 };
 
@@ -219,6 +242,8 @@
 	wifi@0,0 {
 		compatible = "mediatek,mt76";
 		reg = <0x0000 0 0 0 0>;
-		mediatek,mtd-eeprom = <&factory 0x8000>;
+		nvmem-cells = <&eeprom_factory_0>;
+		nvmem-cell-names = "eeprom";
+		ieee80211-freq-limit = <5000000 6000000>;
 	};
 };

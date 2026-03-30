@@ -1,30 +1,40 @@
 From: Kervin Pursoty <kpursoty@proton.me>
-Subject: clocksource: timer-econet-en751221: fix IRQ ack to disarm compare register
+Subject: clocksource: timer-econet-en751221: fix IRQ ack for one-shot operation
 
-cevt_interrupt() acks the compare register by writing the current count
-value back to compare:
+The interrupt handler acks the compare register by copying the current
+count back to compare:
 
   iowrite32(ioread32(reg_count(cpu)), reg_compare(cpu));
 
-On EN751627 this is a posted write through KSEG1 (uncached). By the time
-the write completes, the free-running counter has already advanced past
-the written value, so the pending bit re-asserts immediately. The result
-is a tight interrupt storm on CPU0 that starves all other IRQs, including
-QDMA (ethernet) which never gets a chance to deliver.
+The hardware fires an interrupt whenever count >= compare.  By the time
+this MMIO write reaches the peripheral, the free-running counter has
+advanced past the written value, so the pending condition (count >=
+compare) re-asserts on the same bus cycle.  The result is an unintended
+tight interrupt storm on CPU0 that starves all other IRQs.
 
-Fix: ack by writing U32_MAX to compare (effectively disarming it), then
-let the next set_next_event() arm it with the correct future value. This
-is consistent with how cevt_dev_init() initialises the register.
+The EcoNet GPL vendor kernel (arch/mips/econet/time2.c, function
+cputmr_timer_ack()) acknowledges the HPT interrupt by writing the
+*next* deadline to CMR:
+
+  expirelo[vpe] += cycles_per_jiffy;
+  regWrite32(cputmr_cmr[vpe], expirelo[vpe]);
+
+Writing a value in the future (count < compare) clears the pending
+condition.  For the one-shot case the correct equivalent is to write
+U32_MAX, which is unreachable by the 32-bit counter before
+set_next_event() is called to program the next real deadline.  This is
+consistent with how cevt_dev_init() initialises the register.
 
 Signed-off-by: Kervin Pursoty <kpursoty@proton.me>
 --- a/drivers/clocksource/timer-econet-en751221.c
 +++ b/drivers/clocksource/timer-econet-en751221.c
-@@ -85,7 +85,8 @@
+@@ -85,7 +85,9 @@
  	if (!cevt_is_pending(cpu))
  		return IRQ_NONE;
 
 -	iowrite32(ioread32(reg_count(cpu)), reg_compare(cpu));
-+	/* Disarm compare to prevent re-fire on posted-write; set_next_event() re-arms. */
++	/* Ack: write a future value (U32_MAX) so count < compare, clearing the
++	 * pending condition.  set_next_event() will program the real deadline. */
 +	iowrite32(U32_MAX, reg_compare(cpu));
  	dev->event_handler(dev);
  	return IRQ_HANDLED;
