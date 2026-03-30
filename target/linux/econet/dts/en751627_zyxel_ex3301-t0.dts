@@ -232,8 +232,14 @@
 	wifi@0,0 {
 		compatible = "mediatek,mt76";
 		reg = <0x0000 0 0 0 0>;
-		nvmem-cells = <&eeprom_factory_0>;
-		nvmem-cell-names = "eeprom";
+		/*
+		 * EN751627 is big-endian MIPS. Factory EEPROM is stored in
+		 * big-endian byte order. Use mediatek,mtd-eeprom + big-endian
+		 * so mt76 byte-swaps to LE before validation and use.
+		 * nvmem path lacks the big-endian swap (only MTD path has it).
+		 */
+		mediatek,mtd-eeprom = <&factory 0x0>;
+		big-endian;
 		ieee80211-freq-limit = <2400000 2500000>;
 	};
 };
@@ -242,8 +248,8 @@
 	wifi@0,0 {
 		compatible = "mediatek,mt76";
 		reg = <0x0000 0 0 0 0>;
-		nvmem-cells = <&eeprom_factory_0>;
-		nvmem-cell-names = "eeprom";
-		ieee80211-freq-limit = <5000000 6000000>;
+		mediatek,mtd-eeprom = <&factory 0x0>;
+		big-endian;
+		ieee80211-freq-limit = <5000000 5850000>;
 	};
 };

@@ -272,3 +272,6 @@ CONFIG_RANDOM_TRUST_CPU=y
 
 # IPv6: re-enabled for OpenWrt compliance (v69 diagnostic confirmed IPv6 not the root cause)
 # The RCU stalls are caused by QDMA TX done IRQ not firing — any TX path triggers it.
+
+# Required for mt7915e coredump/relay subsystem
+CONFIG_RELAY=y
