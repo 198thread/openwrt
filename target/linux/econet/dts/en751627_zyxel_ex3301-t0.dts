@@ -8,7 +8,9 @@
  *   RAM:    256 MB
  *   Flash:  128 MB SPI NAND (Winbond W25N01G)
  *           page=2048B oob=64B block=128KB
- *   WiFi:   MT7915 (2.4GHz AX, PCIe slot 0) + MT7916 (5GHz AX, PCIe slot 1)
+ *   WiFi:   MT7915 (5GHz AX, PCIe slot 0) + MT7916 (6GHz AX, PCIe slot 1)
+ *           EEPROM[0x190]: band0=0x01(5GHz), band1=0x02(6GHz) confirmed from live device.
+ *           6GHz antenna unpopulated on some units (U.Fl connector present).
  *   Switch: Internal 5-port GbE via MT7530 (MDIO addr 0x1f)
  *   USB:    xHCI USB 3.0 (1 port)
  *   MAC:    48:ED:E6:B6:5C:F0 (eth0)
@@ -171,8 +173,8 @@
 		};
 
 		/*
-		 * Factory: combined WiFi EEPROM for MT7915 (2.4GHz) and MT7916
-		 * (5GHz). Both radios share a single blob starting at offset 0x0.
+		 * Factory: combined WiFi EEPROM for MT7915 (5GHz) and MT7916
+		 * (6GHz). Both radios share a single blob starting at offset 0x0.
 		 * The mt7915e driver identifies each radio from the PCIe device ID
 		 * and reads the appropriate calibration sub-record from the blob.
 		 * Only 0x0000-0x7FFF contains valid data; 0x8000 onward is 0xFF.
@@ -221,11 +223,11 @@
 };
 
 &pcie0 {
-	status = "okay";  /* 14C3:7915 — MT7915 2.4GHz WiFi 6 */
+	status = "okay";  /* 14C3:7915 — MT7915 5GHz WiFi 6 */
 };
 
 &pcie1 {
-	status = "okay";  /* 14C3:7916 — MT7916 5GHz WiFi 6 */
+	status = "okay";  /* 14C3:7916 — MT7916 6GHz WiFi 6E */
 };
 
 &slot0 {
@@ -240,7 +242,7 @@
 		 */
 		mediatek,mtd-eeprom = <&factory 0x0>;
 		big-endian;
-		ieee80211-freq-limit = <2400000 2500000>;
+		/* EEPROM band0=0x01(5GHz) — no freq-limit, let EEPROM drive band */
 	};
 };
 
@@ -250,6 +252,6 @@
 		reg = <0x0000 0 0 0 0>;
 		mediatek,mtd-eeprom = <&factory 0x0>;
 		big-endian;
-		ieee80211-freq-limit = <5000000 5850000>;
+		/* EEPROM band1=0x02(6GHz) — no freq-limit, HE caps set by driver */
 	};
 };
