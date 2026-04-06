@@ -105,17 +105,7 @@
 		#reset-cells = <1>;
 	};
 
-	pcie_phy0: pcie-phy@1faf2000 {
-		compatible = "econet,en7528-pcie-phy0";
-		reg = <0x1faf2000 0x1000>;
-		#phy-cells = <0>;
-	};
-
-	pcie_phy1: pcie-phy@1fac0000 {
-		compatible = "econet,en7528-pcie-phy1";
-		reg = <0x1fac0000 0x1000>;
-		#phy-cells = <0>;
-	};
+	/* PCIe PHY initialised by BL2 bootloader; no driver required */
 
 	gpio0: gpio@1fbf0200 {
 		compatible = "airoha,en7523-gpio";
@@ -125,6 +115,25 @@
 		      <0x1fbf0214 0x4>;
 		gpio-controller;
 		#gpio-cells = <2>;
+	};
+
+	/*
+	 * Serial LED shift register (SGPIO).
+	 * CR_SGPIO_DATA at 0x1fbf0224 — 14-bit shift register output.
+	 * Write a 14-bit word; hardware clocks it out serially to 7 RGB LEDs.
+	 * bit(n*2)=Red, bit(n*2+1)=Green per LED, n=0..6 (LSB-first).
+	 * LED order: 0=power, 1=sync, 2=globe, 3=ethernet, 4=2.4GHz, 5=5GHz, 6=phone.
+	 * Bootloader boot state: 0x3F19 (power=red+green, ethernet=red+green,
+	 *   2.4GHz/5GHz/phone=orange).
+	 * Access via: /sys/kernel/debug/regmap/1fbf0224.sgpio-leds/registers
+	 * Write example (power green only = 0x0002):
+	 *   printf "0: 0x00000002\n" > /sys/kernel/debug/regmap/1fbf0224.sgpio-leds/registers
+	 * Polling: bit31 of the register is SLED_STATUS_READY — poll before write.
+	 */
+	sgpio_leds: sgpio-leds@1fbf0224 {
+		compatible = "syscon";
+		reg = <0x1fbf0224 0x4>;
+		reg-io-width = <4>;
 	};
 
 	gpio1: gpio@1fbf0270 {
@@ -214,8 +223,6 @@
 		interrupt-names = "pcie_irq";
 		clocks = <&scu EN751221_CLK_PCIE>;
 		clock-names = "sys_ck0";
-		phys = <&pcie_phy0>;
-		phy-names = "pcie-phy0";
 		bus-range = <0x00 0xff>;
 		ranges = <0x01000000 0 0x00000000 0x1f600000 0 0x00010000>,
 			 <0x82000000 0 0x20000000 0x20000000 0 0x08000000>;
@@ -256,8 +263,6 @@
 		interrupt-names = "pcie_irq";
 		clocks = <&scu EN751221_CLK_PCIE>;
 		clock-names = "sys_ck1";
-		phys = <&pcie_phy1>;
-		phy-names = "pcie-phy1";
 		bus-range = <0x00 0xff>;
 		ranges = <0x01000000 0 0x00000000 0x1f610000 0 0x00010000>,
 			 <0x82000000 0 0x28000000 0x28000000 0 0x08000000>;
@@ -295,7 +300,7 @@
 		#size-cells = <0>;
 
 		interrupt-parent = <&gic>;
-		interrupts = <GIC_SHARED 10 IRQ_TYPE_LEVEL_HIGH>;
+		interrupts = <GIC_SHARED 17 IRQ_TYPE_LEVEL_HIGH>;
 		usb3-lpm-capable;
 	};
 
