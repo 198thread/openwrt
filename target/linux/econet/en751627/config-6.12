@@ -1,21 +1,11 @@
 # CONFIG_FORTIFY_SOURCE is not set
 CONFIG_ARCH_32BIT_OFF_T=y
-CONFIG_DEVMEM=y
-# CONFIG_STRICT_DEVMEM is not set
-# CONFIG_IO_STRICT_DEVMEM is not set
 
-# USB support — for the rear USB 3.0 port (xHCI MTK)
-# kmod-usb3 pulls kmod-usb-xhci-hcd + kmod-usb-xhci-mtk for TARGET_econet_en751627.
-# These CONFIG symbols must be set for the modules to be built.
 CONFIG_USB_SUPPORT=y
 CONFIG_USB=y
 CONFIG_USB_XHCI_HCD=m
 CONFIG_USB_XHCI_PLATFORM=y
 CONFIG_USB_XHCI_MTK=m
-# USB Mass Storage — required for kmod-usb-storage (pen drives, USB HDDs)
-# kmod-scsi-core needs SCSI + SCSI_COMMON + BLK_DEV_SD.
-# kmod-usb-storage needs USB_STORAGE.
-# All set as =m so they build as modules and get packaged by OpenWrt.
 CONFIG_SCSI=m
 CONFIG_SCSI_COMMON=m
 CONFIG_BLK_DEV_SD=m
@@ -73,8 +63,6 @@ CONFIG_MTD_SPLIT_FIRMWARE_NAME="firmware1"
 CONFIG_OF_DYNAMIC=y
 CONFIG_KALLSYMS=y
 CONFIG_PRINTK_TIME=y
-CONFIG_PRINTK_CALLER=y
-CONFIG_PANIC_TIMEOUT=5
 CONFIG_DEVTMPFS=y
 CONFIG_DEVTMPFS_MOUNT=y
 CONFIG_DMA_NEED_SYNC=y
@@ -141,8 +129,8 @@ CONFIG_MIPS_ASID_SHIFT=0
 CONFIG_MIPS_CM=y
 # CONFIG_MIPS_CMDLINE_FROM_BOOTLOADER is not set
 CONFIG_MIPS_CMDLINE_FROM_DTB=y
-CONFIG_MIPS_CPC=y
-CONFIG_MIPS_CPS=y
+# CONFIG_MIPS_CPC is not set
+# CONFIG_MIPS_CPS is not set
 # CONFIG_MIPS_CPS_NS16550_BOOL is not set
 CONFIG_MIPS_CPU_SCACHE=y
 CONFIG_MIPS_GIC=y
@@ -182,7 +170,6 @@ CONFIG_NET_DSA_MT7530=y
 CONFIG_NET_DSA_MT7530_MDIO=y
 # CONFIG_MDIO_GPIO is not set
 # CONFIG_MDIO_BITBANG is not set
-CONFIG_MDIO_NETLINK=y
 # CONFIG_NET_DSA_MT7530_MMIO is not set
 CONFIG_NET_VENDOR_MEDIATEK=y
 # CONFIG_NET_MEDIATEK_SOC is not set
@@ -280,15 +267,6 @@ CONFIG_ZSTD_COMMON=y
 CONFIG_ZSTD_COMPRESS=y
 CONFIG_ZSTD_DECOMPRESS=y
 
-# RNG: RANDOM_TRUST_CPU seeds from MIPS CP0 timer — fast on 1004Kc.
-# CRYPTO_JITTERENTROPY removed (v67 regression): on single-VPE boot (MIPS_CPS not
-# yet online), jitter collection spins measuring timer deltas with no parallelism,
-# blocking crng init. With 2 CPUs (MIPS_CPS working), TRUST_CPU is sufficient.
 # CONFIG_CRYPTO_JITTERENTROPY is not set
 CONFIG_RANDOM_TRUST_CPU=y
-
-# IPv6: re-enabled for OpenWrt compliance (v69 diagnostic confirmed IPv6 not the root cause)
-# The RCU stalls are caused by QDMA TX done IRQ not firing — any TX path triggers it.
-
-# Required for mt7915e coredump/relay subsystem
 CONFIG_RELAY=y
