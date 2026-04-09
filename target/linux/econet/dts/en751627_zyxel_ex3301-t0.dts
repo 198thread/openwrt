@@ -155,8 +155,13 @@
 		};
 
 		partition@54a0000 {
-			/* Persistent overlay storage (UBIFS on UBI). */
-			label = "rootfs_data";
+			/*
+			 * Persistent overlay storage (UBIFS on UBI).
+			 * Named "ubi" so the kernel ubi_auto_attach() probes and
+			 * attaches it automatically — no ubi.mtd= bootarg needed.
+			 * fstools/mount_root finds it as volume name "rootfs_data".
+			 */
+			label = "ubi";
 			reg = <0x054a0000 0x02000000>;
 		};
 
@@ -192,11 +197,6 @@
 	mac-address = [ 48 ED E6 B6 5C F0 ];
 };
 
-&gmac1 {
-	status = "okay";
-	phy-mode = "rgmii-rxid";
-};
-
 &usb {
 	status = "okay";
 };
@@ -228,37 +228,13 @@
 	};
 };
 
-&switch0 {
-	/*
-	 * RJ45 port LEDs: MT7530 LED_CTRL register (offset 0x7d00) is
-	 * accessible only via MDIO. The EN751627 MMIO bridge (FE+0x8000)
-	 * does not forward LED_EN or LED_IO_MODE writes to MT7530. In MCM
-	 * mode the upstream mt7530 DSA driver does not initialise LED_CTRL,
-	 * so all RJ45 port LEDs remain dark. A driver patch or dedicated
-	 * LED binding is required to enable them.
-	 */
-	ports {
-		port@4 {
-			reg = <4>;
-			label = "wan";
-			phy-mode = "gmii";
-
-			fixed-link {
-				speed = <1000>;
-				full-duplex;
-			};
-		};
-
-		port@5 {
-			reg = <5>;
-			label = "cpu";
-			ethernet = <&gmac1>;
-			phy-mode = "rgmii-rxid";
-
-			fixed-link {
-				speed = <1000>;
-				full-duplex;
-			};
-		};
-	};
-};
+/*
+ * &switch0 WAN port (port@4) and second CPU port (port@5 → gmac1) are not
+ * added here. The dtsi defines LAN ports 0-3 and CPU port@6 (→ gmac0/trgmii)
+ * which are sufficient for LAN operation. WAN port requires gmac1 + port@5
+ * but causes MT7530 link instability on this platform — under investigation.
+ *
+ * RJ45 port LEDs: MT7530 LED_CTRL (offset 0x7d00) is MDIO-only. The EN751627
+ * MMIO bridge does not forward LED_EN/LED_IO_MODE writes to MT7530. LEDs
+ * remain dark without a driver patch or dedicated LED binding.
+ */
