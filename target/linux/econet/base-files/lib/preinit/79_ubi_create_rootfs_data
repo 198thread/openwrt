@@ -1,0 +1,23 @@
+#!/bin/sh
+# Attach the rootfs_data MTD partition as UBI and create the overlay volume
+# on first boot. Subsequent boots find ubi0_0 and mount it as UBIFS overlay.
+
+ubi_create_rootfs_data() {
+	local mtdnum
+
+	# Find the rootfs_data MTD partition number
+	mtdnum=$(grep '"rootfs_data"' /proc/mtd 2>/dev/null | sed 's/mtd\([0-9]*\):.*/\1/')
+	[ -n "$mtdnum" ] || return
+
+	# Attach if not already attached
+	if [ ! -d /sys/class/ubi/ubi0 ]; then
+		ubiattach -m "$mtdnum" /dev/ubi_ctrl || return
+	fi
+
+	# Create the volume if none exist (first boot)
+	if [ "$(cat /sys/class/ubi/ubi0/volumes_count 2>/dev/null)" = "0" ]; then
+		ubimkvol /dev/ubi0 -N rootfs_data -m
+	fi
+}
+
+boot_hook_add preinit_main ubi_create_rootfs_data
