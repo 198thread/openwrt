@@ -229,6 +229,7 @@ ifeq ($(DUMP),1)
     CPU_CFLAGS_4kec = -mips32r2 -mtune=4kec
     CPU_CFLAGS_24kc = -mips32r2 -mtune=24kc
     CPU_CFLAGS_74kc = -mips32r2 -mtune=74kc
+    CPU_CFLAGS_1004kc = -mips32r2 -mtune=1004kc
     CPU_CFLAGS_octeonplus = -march=octeon+ -mabi=64
   endif
   ifeq ($(ARCH),i386)

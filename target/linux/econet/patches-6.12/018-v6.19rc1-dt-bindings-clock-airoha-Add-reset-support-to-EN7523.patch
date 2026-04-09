@@ -1,11 +1,12 @@
 From 947643509279a605a09959a06d332bf027e8be57 Mon Sep 17 00:00:00 2001
 From: Mikhail Kshevetskiy <mikhail.kshevetskiy@iopsys.eu>
 Date: Mon, 10 Nov 2025 06:56:43 +0300
-Subject: [PATCH] dt-bindings: clock: airoha: Add reset support to EN7523 clock
- binding
+Subject: [PATCH] dt-bindings: clock: airoha: update EN7523 binding for reset support
 
-Introduce reset capability to EN7523 device-tree clock binding
-documentation.
+Update EN7523 clock binding YAML: remove the '#reset-cells: false'
+restriction that was preventing EN7523 from using the reset controller
+support added by the accompanying driver patch, and add '#reset-cells: <1>'
+to the EN7523 compatible example.
 
 Signed-off-by: Mikhail Kshevetskiy <mikhail.kshevetskiy@iopsys.eu>
 Reviewed-by: Rob Herring (Arm) <robh@kernel.org>

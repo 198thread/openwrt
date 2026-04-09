@@ -23,21 +23,21 @@
 
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/input/input.h>
-#include <dt-bindings/leds/common.h>
 
 / {
 	compatible = "zyxel,ex3301-t0", "econet,en751627";
 	model = "ZyXEL EX3301-T0";
 
 	aliases {
+		serial0 = &uart;
 		led-boot = &led_power;
 		led-failsafe = &led_power;
+		led-running = &led_power;
 		led-upgrade = &led_power;
-		serial0 = &uart;
 	};
 
 	chosen {
-		bootargs = "console=ttyS0,115200n8 rootwait rootfstype=squashfs loglevel=7 panic=5 clk_ignore_unused ipv6.disable=1";
+		bootargs = "console=ttyS0,115200n8 rootwait rootfstype=squashfs ubi.mtd=rootfs_data loglevel=7 panic=5 clk_ignore_unused ipv6.disable=1";
 		stdout-path = "serial0:115200n8";
 	};
 
@@ -46,33 +46,56 @@
 		reg = <0x00000000 0x10000000>;  /* 256 MB */
 	};
 
-	/* GPIO pin numbers verified from /sys/kernel/debug/gpio on live device */
-	leds {
-		compatible = "gpio-leds";
+	/*
+	 * Front-panel LEDs — SGPIO serial shift register (CR_SGPIO_DATA 0x1fbf0224).
+	 *
+	 * The hardware serially clocks out a 14-bit word to 7 dual-colour (R/G) LEDs.
+	 * Writing 0x1fbf0224 causes the hardware to shift out the data automatically.
+	 * Bit encoding: bit(n*2)=Red, bit(n*2+1)=Green, n=0..6, LSB-first.
+	 * Boot state written by ZHAL: 0x3F19.
+	 *
+	 * Upstream driver: "econet,en751627-sgpio-leds" (pending submission).
+	 * Status "disabled" until driver is merged; remove to activate.
+	 *
+	 * Accessed at runtime via:
+	 *   /sys/kernel/debug/regmap/1fbf0224.sgpio-leds/registers (syscon node)
+	 * Write example (all-green):
+	 *   printf "0: 0x00002aaa\n" > /sys/kernel/debug/regmap/1fbf0224.sgpio-leds/registers
+	 */
+	leds: leds {
+		compatible = "econet,en751627-sgpio-leds";
+		econet,sgpio-data = <&sgpio_leds>;
+		status = "disabled";
 
-		led_power: led-0 {
-			color = <LED_COLOR_ID_GREEN>;
-			function = LED_FUNCTION_POWER;
-			gpios = <&gpio0 5 GPIO_ACTIVE_LOW>;
+		led_power: power {
+			label = "green:power";
 			default-state = "on";
 		};
 
-		led-1 {
-			color = <LED_COLOR_ID_BLUE>;
-			function = LED_FUNCTION_WAN_ONLINE;
-			gpios = <&gpio0 13 GPIO_ACTIVE_LOW>;
+		led_sync: sync {
+			label = "green:sync";
 		};
 
-		led-2 {
-			color = <LED_COLOR_ID_GREEN>;
-			function = LED_FUNCTION_WLAN_2GHZ;
-			gpios = <&gpio0 21 GPIO_ACTIVE_LOW>;
+		led_internet: internet {
+			label = "green:internet";
 		};
 
-		led-3 {
-			color = <LED_COLOR_ID_GREEN>;
-			function = LED_FUNCTION_WLAN_5GHZ;
-			gpios = <&gpio1 6 GPIO_ACTIVE_LOW>; /* gpio1 pin 6 = SoC pin 38 */
+		led_lan: lan {
+			label = "green:lan";
+		};
+
+		led_wifi24: wifi24 {
+			label = "green:wifi24";
+			linux,default-trigger = "phy0tpt";
+		};
+
+		led_wifi5g: wifi5g {
+			label = "green:wifi5g";
+			linux,default-trigger = "phy1tpt";
+		};
+
+		led_phone: phone {
+			label = "green:phone";
 		};
 	};
 
@@ -168,7 +191,13 @@
 		};
 
 		partition@54a0000 {
-			label = "misc";
+			/*
+			 * Persistent overlay storage. Kernel attaches this as UBI
+			 * at boot via ubi.mtd=rootfs_data in bootargs. A preinit
+			 * hook creates the "rootfs_data" UBI volume on first boot;
+			 * subsequent boots find ubi0_0 and mount it as UBIFS overlay.
+			 */
+			label = "rootfs_data";
 			reg = <0x054a0000 0x02000000>;
 		};
 
@@ -218,6 +247,11 @@
 	mac-address = [ 48 ED E6 B6 5C F0 ];
 };
 
+&gmac1 {
+	status = "okay";
+	phy-mode = "rgmii-rxid";
+};
+
 &usb {
 	status = "okay";
 };
@@ -252,6 +286,52 @@
 		reg = <0x0000 0 0 0 0>;
 		mediatek,mtd-eeprom = <&factory 0x0>;
 		big-endian;
-		/* EEPROM band1=0x02(6GHz) — no freq-limit, HE caps set by driver */
+		/* EEPROM band1=0x02 — MT7916 registers as 5GHz Band 2 on this unit */
+	};
+};
+
+&switch0 {
+	/*
+	 * RJ45 port LEDs: MT7530 LED_CTRL register (offset 0x7d00) is
+	 * accessible only via MDIO. The EN751627 MMIO bridge (FE+0x8000)
+	 * does not forward LED_EN or LED_IO_MODE writes to MT7530. In MCM
+	 * mode the upstream mt7530 DSA driver does not initialise LED_CTRL,
+	 * so all RJ45 port LEDs remain dark. A driver patch or dedicated
+	 * LED binding is required to enable them.
+	 */
+	ports {
+		/*
+		 * MT7530 port 4: WAN RJ45 (internal GbE PHY 4).
+		 * MT7530 is in MCM mode — no slave MDIO bus is created, so
+		 * internal PHY auto-discovery does not work. Use fixed-link
+		 * like ports 0-3 in the dtsi. MT7530 handles PHY internally.
+		 * Traffic flows: WAN jack → MT7530 port 4 → port 5 → gmac1 (eth1).
+		 */
+		port@4 {
+			reg = <4>;
+			label = "wan";
+			phy-mode = "gmii";
+
+			fixed-link {
+				speed = <1000>;
+				full-duplex;
+			};
+		};
+
+		/*
+		 * MT7530 port 5: second CPU port, connects to gmac1 (eth1).
+		 * rgmii-rxid matches the gmac1 phy-mode.
+		 */
+		port@5 {
+			reg = <5>;
+			label = "cpu";
+			ethernet = <&gmac1>;
+			phy-mode = "rgmii-rxid";
+
+			fixed-link {
+				speed = <1000>;
+				full-duplex;
+			};
+		};
 	};
 };

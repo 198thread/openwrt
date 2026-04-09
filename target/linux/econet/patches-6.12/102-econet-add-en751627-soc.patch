@@ -70,7 +70,7 @@ The EN751627 also has 4 VPEs (2 cores x 2 VPEs each) so NR_CPUS=4.
  	_machine_restart = hw_reset;
  }
  
-@@ -62,10 +72,24 @@ void __init device_tree_init(void)
+@@ -62,10 +72,28 @@ void __init device_tree_init(void)
  	unflatten_and_copy_device_tree();
  
 -	/* EN7528 dual-core: probe CM/CPC and register CPS SMP ops */
@@ -78,21 +78,25 @@ The EN751627 also has 4 VPEs (2 cores x 2 VPEs each) so NR_CPUS=4.
 +	/* EN7528: probe CM + CPC, register CPS SMP ops */
  	mips_cm_probe();
  	mips_cpc_probe();
-
+ 
  	if (!register_cps_smp_ops())
  		return;
-
+ 
 +#elif defined(CONFIG_SOC_ECONET_EN751627)
 +	/*
-+	 * EN751627: CM (GCR 0x1f8e0000) present and required to map the GIC.
-+	 * CPC is NOT probed — accessing CPC registers hangs the EN751627 SoC.
-+	 * register_cps_smp_ops() uses CM to bring up secondary VPEs (VPE1-3).
-+	 * Without this, only VPE0 boots (register_up_smp_ops = uniprocessor).
++	 * EN751627: CM (GCR 0x1f8e0000) is present and required to map the GIC.
++	 * mips_cpc_probe() safely checks GCR_CPC_STATUS_EX before touching any
++	 * CPC registers - if CPC is absent it returns -ENODEV immediately.
++	 * With CPC present, boot_core() can issue CPC_Cx_CMD_RESET to bring up
++	 * core 1 (CPU2/CPU3). Without it, write_gcr_co_reset_release(0) is used
++	 * instead, which is insufficient on this SoC (core 1 never responds).
++	 * Verified working in v115 (2026-03-29): all 4 CPUs online.
 +	 */
 +	mips_cm_probe();
-+
++	mips_cpc_probe();
++ 
 +	if (!register_cps_smp_ops())
 +		return;
-+
++ 
 +#endif
  	register_up_smp_ops();

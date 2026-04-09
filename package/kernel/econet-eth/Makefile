@@ -15,7 +15,7 @@ include $(INCLUDE_DIR)/package.mk
 define KernelPackage/econet-eth
   SUBMENU:=Network Devices
   TITLE:=EcoNet EN751221 Ethernet Driver
-  DEPENDS:=@TARGET_econet
+  DEPENDS:=@TARGET_econet @!TARGET_econet_en751627
   FILES:=$(PKG_BUILD_DIR)/econet-eth.ko
   AUTOLOAD:=$(call AutoLoad,90,econet-eth)
 endef
