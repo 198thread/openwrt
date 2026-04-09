@@ -1,4 +1,4 @@
-From: OpenWrt Community <openwrt-devel@lists.openwrt.org>
+From: Kervin Pursoty <kpursoty@proton.me>
 Subject: mips: early_printk_8250: poll THRE only, not TEMT
 
 prom_putchar() in early_printk_8250.c currently polls both THRE (bit 5,
@@ -20,6 +20,8 @@ strict and causes problems on platforms that don't assert it reliably.
 Change prom_putchar() to poll THRE only. This is safe for all MIPS
 platforms: a UART ready for the next byte always asserts THRE.
 
+Signed-off-by: Kervin Pursoty <kpursoty@proton.me>
+---
 --- a/arch/mips/kernel/early_printk_8250.c
 +++ b/arch/mips/kernel/early_printk_8250.c
 @@ -42,5 +42,10 @@ void prom_putchar(char c)

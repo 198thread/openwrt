@@ -1,4 +1,4 @@
-From: OpenWrt Community <openwrt-devel@lists.openwrt.org>
+From: Kervin Pursoty <kpursoty@proton.me>
 Subject: mips: econet: add EN751627 SoC support
 
 The EN751627 family (EN7516, EN7527, EN7561) is a big-endian quad-VPE
@@ -17,6 +17,8 @@ endianness check added in the EN7528 patch for non-LE case).
 
 The EN751627 also has 4 VPEs (2 cores x 2 VPEs each) so NR_CPUS=4.
 
+Signed-off-by: Kervin Pursoty <kpursoty@proton.me>
+---
 --- a/arch/mips/econet/Kconfig
 +++ b/arch/mips/econet/Kconfig
 @@ -41,5 +41,29 @@ choice
@@ -86,17 +88,17 @@ The EN751627 also has 4 VPEs (2 cores x 2 VPEs each) so NR_CPUS=4.
 +	/*
 +	 * EN751627: CM (GCR 0x1f8e0000) is present and required to map the GIC.
 +	 * mips_cpc_probe() safely checks GCR_CPC_STATUS_EX before touching any
-+	 * CPC registers - if CPC is absent it returns -ENODEV immediately.
-+	 * With CPC present, boot_core() can issue CPC_Cx_CMD_RESET to bring up
-+	 * core 1 (CPU2/CPU3). Without it, write_gcr_co_reset_release(0) is used
-+	 * instead, which is insufficient on this SoC (core 1 never responds).
-+	 * Verified working in v115 (2026-03-29): all 4 CPUs online.
++	 * CPC registers; if CPC is absent it returns -ENODEV immediately.
++	 * With CPC present, boot_core() issues CPC_Cx_CMD_RESET to bring up
++	 * core 1 (CPU2/CPU3). Without CPC, the fallback path uses
++	 * write_gcr_co_reset_release(0) which is insufficient on this SoC
++	 * and leaves core 1 permanently offline.
 +	 */
 +	mips_cm_probe();
 +	mips_cpc_probe();
 + 
 +	if (!register_cps_smp_ops())
 +		return;
-+ 
++
 +#endif
  	register_up_smp_ops();

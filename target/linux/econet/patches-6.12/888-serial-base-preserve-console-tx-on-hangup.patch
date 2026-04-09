@@ -1,6 +1,4 @@
-From 0000000000000000000000000000000000000006 Mon Sep 17 00:00:00 2001
 From: Kervin Pursoty <kpursoty@proton.me>
-Date: Mon, 1 Jan 2024 00:00:00 +0000
 Subject: serial: base: preserve console TX on hangup
 
 Do not disable TX when hanging up a console port. When procd's

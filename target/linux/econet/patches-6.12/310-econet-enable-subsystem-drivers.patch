@@ -9,7 +9,9 @@ non-coherent MIPS SoC and the DMA framework requires this symbol to
 perform cache maintenance on DMA buffers.
 
 Signed-off-by: Ahmed Naseef <naseefkm@gmail.com>
+Co-developed-by: Kervin Pursoty <kpursoty@proton.me>
 Signed-off-by: Kervin Pursoty <kpursoty@proton.me>
+---
 --- a/arch/mips/Kconfig
 +++ b/arch/mips/Kconfig
 @@ -391,6 +391,7 @@ config MACH_DECSTATION
