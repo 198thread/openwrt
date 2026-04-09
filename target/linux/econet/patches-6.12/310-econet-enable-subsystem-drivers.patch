@@ -1,0 +1,55 @@
+Subject: mips: econet: enable subsystem drivers for ECONET platform
+
+Add ECONET to the Kconfig dependencies of USB xHCI MTK, GPIO EN7523,
+and NET_VENDOR_MEDIATEK. These drivers are present on EcoNet EN75xx SoCs
+which share the same IP as Airoha / MediaTek platforms.
+
+Also add DMA_NONCOHERENT to the ECONET Kconfig selects; EN751627 is a
+non-coherent MIPS SoC and the DMA framework requires this symbol to
+perform cache maintenance on DMA buffers.
+
+Signed-off-by: Ahmed Naseef <naseefkm@gmail.com>
+Signed-off-by: Kervin Pursoty <kpursoty@proton.me>
+--- a/arch/mips/Kconfig
++++ b/arch/mips/Kconfig
+@@ -391,6 +391,7 @@ config MACH_DECSTATION
+ config ECONET
+ 	bool "EcoNet MIPS family"
+ 	select BOOT_RAW
++	select DMA_NONCOHERENT
+ 	select DEBUG_ZBOOT if DEBUG_KERNEL
+ 	select EARLY_PRINTK_8250
+ 	select ECONET_EN751221_TIMER
+--- a/drivers/gpio/Kconfig
++++ b/drivers/gpio/Kconfig
+@@ -271,7 +271,7 @@ config GPIO_EM
+
+ config GPIO_EN7523
+ 	tristate "Airoha GPIO support"
+-	depends on ARCH_AIROHA
++	depends on ARCH_AIROHA || ECONET
+ 	default ARCH_AIROHA
+ 	select GPIO_GENERIC
+ 	select GPIOLIB_IRQCHIP
+--- a/drivers/net/ethernet/mediatek/Kconfig
++++ b/drivers/net/ethernet/mediatek/Kconfig
+@@ -1,7 +1,7 @@
+ # SPDX-License-Identifier: GPL-2.0-only
+ config NET_VENDOR_MEDIATEK
+ 	bool "MediaTek devices"
+-	depends on ARCH_MEDIATEK || ARCH_AIROHA || SOC_MT7621 || SOC_MT7620 || COMPILE_TEST
++	depends on ARCH_MEDIATEK || ARCH_AIROHA || SOC_MT7621 || SOC_MT7620 || ECONET || COMPILE_TEST
+ 	help
+ 	  If you have a Mediatek SoC with ethernet, say Y.
+
+--- a/drivers/usb/host/Kconfig
++++ b/drivers/usb/host/Kconfig
+@@ -71,7 +71,7 @@ config USB_XHCI_HISTB
+ config USB_XHCI_MTK
+ 	tristate "xHCI support for MediaTek SoCs"
+ 	select MFD_SYSCON
+-	depends on (MIPS && SOC_MT7621) || ARCH_MEDIATEK || COMPILE_TEST
++	depends on (MIPS && SOC_MT7621) || ECONET || ARCH_MEDIATEK || COMPILE_TEST
+ 	help
+ 	  Say 'Y' to enable the support for the xHCI host controller
+ 	  found in MediaTek SoCs.
