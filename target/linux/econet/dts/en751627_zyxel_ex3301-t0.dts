@@ -1,22 +1,9 @@
 // SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
 /*
- * ZyXEL EX3301-T0 device tree
- * EcoNet EN751627 (EN7516) SoC, AX1800 WiFi 6 DSL router
+ * Copyright (C) 2024 Kervin Pursoty <kpursoty@proton.me>
  *
- * Hardware (verified from live device 192.168.1.1):
- *   SoC:    EcoNet EN751627 (EN7516), MIPS 1004Kc 4-VPE, big-endian
- *   RAM:    256 MB
- *   Flash:  128 MB SPI NAND (Winbond W25N01G)
- *           page=2048B oob=64B block=128KB
- *   WiFi:   MT7915 (5GHz AX, PCIe slot 0) + MT7916 (6GHz AX, PCIe slot 1)
- *           EEPROM[0x190]: band0=0x01(5GHz), band1=0x02(6GHz) confirmed from live device.
- *           6GHz antenna unpopulated on some units (U.Fl connector present).
- *   Switch: Internal 5-port GbE via MT7530 (MDIO addr 0x1f)
- *   USB:    xHCI USB 3.0 (1 port)
- *   MAC:    48:ED:E6:B6:5C:F0 (eth0)
- *
- * Partition layout verified from /proc/mtd on stock firmware.
- * GPIO assignments verified from /sys/kernel/debug/gpio on running OpenWrt.
+ * ZyXEL EX3301-T0: EcoNet EN751627 (MIPS 1004Kc), AX1800 WiFi 6 DSL router.
+ * 256 MB RAM, 128 MB SPI NAND, MT7915+MT7916 WiFi, MT7530 switch, xHCI USB 3.0.
  */
 
 #include "en751627.dtsi"
@@ -37,7 +24,7 @@
 	};
 
 	chosen {
-		bootargs = "console=ttyS0,115200n8 rootwait rootfstype=squashfs ubi.mtd=rootfs_data loglevel=7 panic=5 clk_ignore_unused ipv6.disable=1";
+		bootargs = "console=ttyS0,115200n8";
 		stdout-path = "serial0:115200n8";
 	};
 
@@ -47,20 +34,9 @@
 	};
 
 	/*
-	 * Front-panel LEDs — SGPIO serial shift register (CR_SGPIO_DATA 0x1fbf0224).
-	 *
-	 * The hardware serially clocks out a 14-bit word to 7 dual-colour (R/G) LEDs.
-	 * Writing 0x1fbf0224 causes the hardware to shift out the data automatically.
-	 * Bit encoding: bit(n*2)=Red, bit(n*2+1)=Green, n=0..6, LSB-first.
-	 * Boot state written by ZHAL: 0x3F19.
-	 *
-	 * Upstream driver: "econet,en751627-sgpio-leds" (pending submission).
-	 * Status "disabled" until driver is merged; remove to activate.
-	 *
-	 * Accessed at runtime via:
-	 *   /sys/kernel/debug/regmap/1fbf0224.sgpio-leds/registers (syscon node)
-	 * Write example (all-green):
-	 *   printf "0: 0x00002aaa\n" > /sys/kernel/debug/regmap/1fbf0224.sgpio-leds/registers
+	 * Front-panel LEDs via SGPIO serial shift register (CR_SGPIO_DATA 0x1fbf0224).
+	 * 14-bit word, 7 dual-colour (R/G) LEDs, 2 bits each, LSB-first.
+	 * Requires "econet,en751627-sgpio-leds" driver (not yet upstream).
 	 */
 	leds: leds {
 		compatible = "econet,en751627-sgpio-leds";
@@ -129,19 +105,13 @@
 	econet,bmt;
 	econet,enable-remap;
 	econet,can-write-factory-bbt;
-	/*
-	 * ZHAL logs "bmt pool size: 81" on boot.
-	 * en75_bmt computes: 1024 blocks * 8/100 = 81 (integer division).
-	 */
-	econet,assert-reserve-size = <81>;
+	econet,assert-reserve-size = <81>; /* 8% of 1024 blocks = 81 */
 	econet,bbt-table-size = <1000>;
 
 	partitions {
 		compatible = "fixed-partitions";
 		#address-cells = <1>;
 		#size-cells = <1>;
-
-		/* Layout verified from stock /proc/mtd — sequential, no gaps */
 
 		partition@0 {
 			label = "bootloader";
@@ -159,12 +129,6 @@
 			reg = <0x00080000 0x02800000>;
 		};
 
-		/*
-		 * firmware1: ZHAL writes TRX here (ATUR,1). Name matches
-		 * CONFIG_MTD_SPLIT_FIRMWARE_NAME so split_firmware() calls
-		 * mtdsplit_tclinux, which creates kernel + rootfs sub-partitions.
-		 * ROOT_DEV is set by mtdcore when it sees the "rootfs" sub-partition.
-		 */
 		partition@2880000 {
 			label = "firmware1";
 			reg = <0x02880000 0x02620000>;
@@ -191,23 +155,11 @@
 		};
 
 		partition@54a0000 {
-			/*
-			 * Persistent overlay storage. Kernel attaches this as UBI
-			 * at boot via ubi.mtd=rootfs_data in bootargs. A preinit
-			 * hook creates the "rootfs_data" UBI volume on first boot;
-			 * subsequent boots find ubi0_0 and mount it as UBIFS overlay.
-			 */
+			/* Persistent overlay storage (UBIFS on UBI). */
 			label = "rootfs_data";
 			reg = <0x054a0000 0x02000000>;
 		};
 
-		/*
-		 * Factory: combined WiFi EEPROM for MT7915 (5GHz) and MT7916
-		 * (6GHz). Both radios share a single blob starting at offset 0x0.
-		 * The mt7915e driver identifies each radio from the PCIe device ID
-		 * and reads the appropriate calibration sub-record from the blob.
-		 * Only 0x0000-0x7FFF contains valid data; 0x8000 onward is 0xFF.
-		 */
 		factory: partition@74a0000 {
 			label = "Factory";
 			reg = <0x074a0000 0x00080000>;
@@ -224,8 +176,6 @@
 			};
 		};
 
-		/* reservearea ends at block 942.
-		 * Blocks 943-1023 = 81 blocks are the en75_bmt pool. */
 		partition@7520000 {
 			label = "reservearea";
 			reg = <0x07520000 0x000c0000>;
@@ -239,11 +189,6 @@
 
 &gmac0 {
 	status = "okay";
-	/*
-	 * MAC address burned into hardware (verified from ARP on 192.168.1.1).
-	 * Must be on mac@0 node so en75_alloc_gdm_port() finds it via
-	 * of_get_ethdev_address(mac@0_node).
-	 */
 	mac-address = [ 48 ED E6 B6 5C F0 ];
 };
 
@@ -268,15 +213,9 @@
 	wifi@0,0 {
 		compatible = "mediatek,mt76";
 		reg = <0x0000 0 0 0 0>;
-		/*
-		 * EN751627 is big-endian MIPS. Factory EEPROM is stored in
-		 * big-endian byte order. Use mediatek,mtd-eeprom + big-endian
-		 * so mt76 byte-swaps to LE before validation and use.
-		 * nvmem path lacks the big-endian swap (only MTD path has it).
-		 */
+		/* big-endian: EEPROM on this SoC is stored BE; mt76 needs MTD path for swap */
 		mediatek,mtd-eeprom = <&factory 0x0>;
 		big-endian;
-		/* EEPROM band0=0x01(5GHz) — no freq-limit, let EEPROM drive band */
 	};
 };
 
@@ -286,7 +225,6 @@
 		reg = <0x0000 0 0 0 0>;
 		mediatek,mtd-eeprom = <&factory 0x0>;
 		big-endian;
-		/* EEPROM band1=0x02 — MT7916 registers as 5GHz Band 2 on this unit */
 	};
 };
 
@@ -300,13 +238,6 @@
 	 * LED binding is required to enable them.
 	 */
 	ports {
-		/*
-		 * MT7530 port 4: WAN RJ45 (internal GbE PHY 4).
-		 * MT7530 is in MCM mode — no slave MDIO bus is created, so
-		 * internal PHY auto-discovery does not work. Use fixed-link
-		 * like ports 0-3 in the dtsi. MT7530 handles PHY internally.
-		 * Traffic flows: WAN jack → MT7530 port 4 → port 5 → gmac1 (eth1).
-		 */
 		port@4 {
 			reg = <4>;
 			label = "wan";
@@ -318,10 +249,6 @@
 			};
 		};
 
-		/*
-		 * MT7530 port 5: second CPU port, connects to gmac1 (eth1).
-		 * rgmii-rxid matches the gmac1 phy-mode.
-		 */
 		port@5 {
 			reg = <5>;
 			label = "cpu";
