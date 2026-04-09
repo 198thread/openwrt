@@ -197,6 +197,41 @@
 	mac-address = [ 48 ED E6 B6 5C F0 ];
 };
 
+&gmac1 {
+	status = "okay";
+	phy-mode = "rgmii-rxid";
+	mac-address = [ 48 ED E6 B6 5C F1 ];
+};
+
+&switch0 {
+	ports {
+		/* MT7530 port 4: WAN RJ45 — internal GbE PHY, auto-discovered */
+		port@4 {
+			reg = <4>;
+			label = "wan";
+			phy-mode = "gmii";
+
+			fixed-link {
+				speed = <1000>;
+				full-duplex;
+			};
+		};
+
+		/* MT7530 port 5: CPU port → gmac1 (eth1, WAN QDMA path) */
+		port@5 {
+			reg = <5>;
+			label = "cpu";
+			ethernet = <&gmac1>;
+			phy-mode = "rgmii-rxid";
+
+			fixed-link {
+				speed = <1000>;
+				full-duplex;
+			};
+		};
+	};
+};
+
 &usb {
 	status = "okay";
 };
