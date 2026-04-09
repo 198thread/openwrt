@@ -1,4 +1,7 @@
-Subject: Adapt Airoha EN7523 SPI to work with EcoNet EN751221
+From 0000000000000000000000000000000000000002 Mon Sep 17 00:00:00 2001
+From: Caleb James DeLisle <cjd@cjdns.fr>
+Date: Mon, 1 Jan 2024 00:00:00 +0000
+Subject: spi: en7523: adapt for EcoNet EN751221 platform
 
 The SPI driver from Airoha EN7523 is copied here in it's original form
 so this patch makes three updates to it in order to make it work

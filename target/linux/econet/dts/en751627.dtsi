@@ -168,18 +168,16 @@
 
 	uart: serial@1fbf0000 {
 		/*
-		 * UART RX strategy: airoha,en7523-uart + no interrupts →
-		 * 8250_of polled mode (serial8250_timeout timer).
+		 * Use airoha,en7523-uart (8250_of) without an IRQ so the
+		 * serial core falls back to polled RX via serial8250_timeout.
 		 *
-		 * ns16550a binds to of_serial which requires IRQ (-ENXIO if
-		 * absent). airoha,en7523-uart binds to 8250_of which tolerates
-		 * irq=0: univ8250_setup_irq() → if (!port->irq) mod_timer()
-		 * → serial8250_timeout polls RX every ~10ms.
+		 * ns16550a requires an IRQ (of_serial returns -ENXIO without
+		 * one). 8250_of tolerates irq=0: univ8250_setup_irq() sees no
+		 * IRQ and arms a ~10ms poll timer instead.
 		 *
-		 * LEVEL_HIGH (v57): 100k spurious THRE fires → irq disabled.
-		 * EDGE_RISING (v32-v56): TX works, RX deaf (THRE always high
-		 *   before RX arrives → no new rising edge → GIC never fires).
-		 * No interrupts (v59+): TX unchanged (direct write), RX polled.
+		 * THRE is always high on EN751627 before any RX byte arrives,
+		 * so an EDGE_RISING IRQ never fires for RX; LEVEL_HIGH causes
+		 * ~100k spurious THRE interrupts per second. No IRQ is correct.
 		 */
 		compatible = "airoha,en7523-uart";
 		reg = <0x1fbf0000 0x30>;

@@ -1,3 +1,19 @@
+From 0000000000000000000000000000000000000006 Mon Sep 17 00:00:00 2001
+From: Kervin Pursoty <kpursoty@proton.me>
+Date: Mon, 1 Jan 2024 00:00:00 +0000
+Subject: serial: base: preserve console TX on hangup
+
+Do not disable TX when hanging up a console port. When procd's
+askconsole fork calls TIOCSCTTY with force=1 the kernel hangs up the
+previous session, which triggers uart_hangup() -> uart_shutdown() ->
+serial_port_set_tx(false). Stopping TX silences all subsequent kernel
+console output permanently.
+
+uart_hangup() already skips uart_change_pm(PM_OFF) for console ports;
+apply the same guard here.
+
+Signed-off-by: Kervin Pursoty <kpursoty@proton.me>
+---
 --- a/drivers/tty/serial/serial_port.c
 +++ b/drivers/tty/serial/serial_port.c
 @@ -110,7 +110,16 @@

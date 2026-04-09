@@ -1,3 +1,14 @@
+From 0000000000000000000000000000000000000008 Mon Sep 17 00:00:00 2001
+From: Ahmed Naseef <naseefkm@gmail.com>
+Date: Mon, 1 Jan 2024 00:00:00 +0000
+Subject: PCI: mediatek: add EN7528/EN751627 PCIe controller support
+
+Extend the mediatek-gen3 PCIe driver to support EcoNet EN7528 and
+EN751627 SoCs. The EN7528 uses the same PCIe IP as Airoha EN7581.
+BL2 initialises the PCIe PHY before handoff; no PHY driver is needed.
+
+Signed-off-by: Ahmed Naseef <naseefkm@gmail.com>
+---
 --- a/drivers/pci/controller/Kconfig
 +++ b/drivers/pci/controller/Kconfig
 @@ -187,7 +187,7 @@ config PCI_MVEBU
