@@ -1,4 +1,7 @@
-Subject: [PATCH] PCI: Skip bridge window reads when window is not supported
+From 000000000000000000000000000000000000000a Mon Sep 17 00:00:00 2001
+From: Ahmed Naseef <naseefkm@gmail.com>
+Date: Mon, 1 Jan 2024 00:00:00 +0000
+Subject: PCI: Skip bridge window reads when window is not supported
 
 pci_read_bridge_io() and pci_read_bridge_mmio_pref() read bridge window
 registers unconditionally. If the registers are hardwired to zero

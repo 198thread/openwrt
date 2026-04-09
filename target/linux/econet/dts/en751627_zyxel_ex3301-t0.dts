@@ -206,7 +206,7 @@
 };
 
 &pcie1 {
-	status = "okay";  /* 14C3:7916 — MT7916 6GHz WiFi 6E */
+	status = "okay";  /* 14C3:7916 — MT7916 5GHz WiFi 6 */
 };
 
 &slot0 {
@@ -227,14 +227,3 @@
 		big-endian;
 	};
 };
-
-/*
- * &switch0 WAN port (port@4) and second CPU port (port@5 → gmac1) are not
- * added here. The dtsi defines LAN ports 0-3 and CPU port@6 (→ gmac0/trgmii)
- * which are sufficient for LAN operation. WAN port requires gmac1 + port@5
- * but causes MT7530 link instability on this platform — under investigation.
- *
- * RJ45 port LEDs: MT7530 LED_CTRL (offset 0x7d00) is MDIO-only. The EN751627
- * MMIO bridge does not forward LED_EN/LED_IO_MODE writes to MT7530. LEDs
- * remain dark without a driver patch or dedicated LED binding.
- */

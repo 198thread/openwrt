@@ -1,7 +1,7 @@
 From f3fa5911b1f094e164c497f7b10d94d92852e285 Mon Sep 17 00:00:00 2001
 From: Caleb James DeLisle <cjd@cjdns.fr>
 Date: Wed, 14 Jan 2026 17:54:05 +0000
-Subject: [PATCH] dt-bindings: clock, reset: Add econet EN751221 bindings
+Subject: dt-bindings: clock, reset: Add econet EN751221 bindings
 
 Add clock and reset bindings for EN751221 based on the Airoha EN7523 SCU
 driver.
