@@ -1,6 +1,4 @@
-From 0000000000000000000000000000000000000009 Mon Sep 17 00:00:00 2001
 From: Caleb James DeLisle <cjd@cjdns.fr>
-Date: Mon, 1 Jan 2024 00:00:00 +0000
 Subject: mtd: nand: econet: add EcoNet bad block table support
 
 The EcoNet BBT/BMT is used for resolving bad blocks in the flash.

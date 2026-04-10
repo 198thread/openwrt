@@ -1,6 +1,4 @@
-From 0000000000000000000000000000000000000001 Mon Sep 17 00:00:00 2001
 From: Bert Vermeulen <bert@biot.com>
-Date: Mon, 1 Jan 2024 00:00:00 +0000
 Subject: spi: en7523: add Airoha EN7523 SPI controller driver
 
 Add a platform SPI driver for the Airoha EN7523 manual-mode SPI

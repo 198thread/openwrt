@@ -1,6 +1,4 @@
-From 0000000000000000000000000000000000000004 Mon Sep 17 00:00:00 2001
 From: Benjamin Larsson <benjamin.larsson@genexis.eu>
-Date: Mon, 1 Jan 2024 00:00:00 +0000
 Subject: serial: 8250: add Airoha EN7523 UART driver
 
 Add a platform driver for the Airoha EN7523 UART, a 16550-compatible

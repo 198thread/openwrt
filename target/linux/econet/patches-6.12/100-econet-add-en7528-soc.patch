@@ -1,37 +1,28 @@
 From: Ahmed Naseef <naseefkm@gmail.com>
-Subject: mips: econet: add EN7528 SoC support
+Subject: mips: econet: add EN7528 SoC support and GIC-based SMP plumbing
 
-The EN7528 is a little endian dual-core MIPS 1004Kc SoC used in xPON
-devices. Unlike the big endian EN751221, EN7528 uses the MIPS GIC
+The EN7528 is a little-endian dual-core MIPS 1004Kc SoC used in xPON
+devices. Unlike the big-endian EN751221, EN7528 uses the MIPS GIC
 interrupt controller for SMP.
 
-This adds boot support for the EN7528 SoC family:
-- New SOC_ECONET_EN7528 Kconfig option
-- Little endian support for ECONET platform
-- UART base address adjustment for endianness
-- CPS SMP ops registration for multi-core support
+This patch makes three changes that are prerequisites for all GIC-based
+SoCs in the EcoNet family:
+
+1. Kconfig: add SOC_ECONET_EN7528; move CPU_BIG_ENDIAN into
+   SOC_ECONET_EN751221 (EN7528 is little-endian).
+
+2. init.c: make UART_BASE endian-aware (LE: byte at offset 0,
+   BE: byte at offset 3). Add the same fix to uart-16550.c.
+
+3. init.c: add CM/CPC/CPS SMP plumbing for GIC-based SoCs.
+   EN7528 and EN751627 both require the same three-call sequence.
+   A single #if guard covers both; add future GIC SoCs to this #if.
 
 Signed-off-by: Ahmed Naseef <naseefkm@gmail.com>
---- a/arch/mips/Kconfig
-+++ b/arch/mips/Kconfig
-@@ -391,13 +391,13 @@ config MACH_DECSTATION
- config ECONET
- 	bool "EcoNet MIPS family"
- 	select BOOT_RAW
--	select CPU_BIG_ENDIAN
- 	select DEBUG_ZBOOT if DEBUG_KERNEL
- 	select EARLY_PRINTK_8250
- 	select ECONET_EN751221_TIMER
- 	select SERIAL_8250
- 	select SERIAL_OF_PLATFORM
- 	select SYS_SUPPORTS_BIG_ENDIAN
-+	select SYS_SUPPORTS_LITTLE_ENDIAN
- 	select SYS_HAS_CPU_MIPS32_R1
- 	select SYS_HAS_CPU_MIPS32_R2
- 	select SYS_HAS_EARLY_PRINTK
+---
 --- a/arch/mips/econet/Kconfig
 +++ b/arch/mips/econet/Kconfig
-@@ -12,6 +12,7 @@ choice
+@@ -12,6 +12,7 @@
  	config SOC_ECONET_EN751221
  		bool "EN751221 family"
  		select COMMON_CLK
@@ -39,18 +30,19 @@ Signed-off-by: Ahmed Naseef <naseefkm@gmail.com>
  		select ECONET_EN751221_INTC
  		select IRQ_MIPS_CPU
  		select SMP
-@@ -22,6 +23,23 @@ choice
+@@ -22,6 +23,24 @@
  		  They are based on single core MIPS 34Kc processors. To boot
  		  this kernel, you will need a device tree such as
  		  MIPS_RAW_APPENDED_DTB=y, and a root filesystem.
-+
 +	config SOC_ECONET_EN7528
 +		bool "EN7528 family"
 +		select COMMON_CLK
 +		select CPU_LITTLE_ENDIAN
++		select HAVE_PCI
 +		select IRQ_MIPS_CPU
 +		select MIPS_CPU_SCACHE
 +		select MIPS_GIC
++		select PCI_DRIVERS_GENERIC
 +		select SMP
 +		select SMP_UP
 +		select SYS_SUPPORTS_HIGHMEM
@@ -83,23 +75,22 @@ Signed-off-by: Ahmed Naseef <naseefkm@gmail.com>
  #define UART_REG_SHIFT		2
  
  static void hw_reset(char *command)
-@@ -51,11 +56,18 @@ void __init plat_mem_setup(void)
- 	early_init_dt_scan_memory();
- }
- 
--/* 3. Overload __weak device_tree_init(), add SMP_UP ops */
-+/* 3. Overload __weak device_tree_init(), register SMP ops */
- void __init device_tree_init(void)
+@@ -56,6 +61,18 @@
  {
  	unflatten_and_copy_device_tree();
  
-+	/* EN7528 dual-core: probe CM/CPC and register CPS SMP ops */
++	/*
++	 * GIC-based SoCs (EN7528, EN751627, any future GIC variant):
++	 * probe CM and CPC, register CPS SMP ops.
++	 * Add new GIC SoCs to this #if; do not add a new #elif.
++	 */
++#if defined(CONFIG_SOC_ECONET_EN7528) || defined(CONFIG_SOC_ECONET_EN751627)
 +	mips_cm_probe();
 +	mips_cpc_probe();
 +
 +	if (!register_cps_smp_ops())
 +		return;
-+
++#endif
  	register_up_smp_ops();
  }
  
@@ -116,4 +107,3 @@ Signed-off-by: Ahmed Naseef <naseefkm@gmail.com>
 +#endif
  #define PORT(offset)	(CKSEG1ADDR(EN75_UART_BASE) + (4 * (offset)))
  #endif
- 

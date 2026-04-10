@@ -1,6 +1,4 @@
-From 0000000000000000000000000000000000000007 Mon Sep 17 00:00:00 2001
 From: Ahmed Naseef <naseefkm@gmail.com>
-Date: Mon, 1 Jan 2024 00:00:00 +0000
 Subject: mtd: spinand: attach MTK BMT on probe
 
 Call mtk_bmt_attach() and mtk_bmt_detach() in spinand_probe() and

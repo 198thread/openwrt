@@ -1,12 +1,14 @@
 Subject: mips: econet: enable subsystem drivers for ECONET platform
 
-Add ECONET to the Kconfig dependencies of USB xHCI MTK, GPIO EN7523,
-and NET_VENDOR_MEDIATEK. These drivers are present on EcoNet EN75xx SoCs
-which share the same IP as Airoha / MediaTek platforms.
-
-Also add DMA_NONCOHERENT to the ECONET Kconfig selects; EN751627 is a
-non-coherent MIPS SoC and the DMA framework requires this symbol to
+Add ECONET to the Kconfig dependency expressions of eight drivers that
+share IP with Airoha/MediaTek SoCs present on EcoNet EN75xx hardware.
+Also select DMA_NONCOHERENT for the platform Kconfig entry; EN751627 is
+a non-coherent MIPS SoC and the DMA framework requires this symbol to
 perform cache maintenance on DMA buffers.
+
+Pattern: every hunk here follows the same rule — add "|| ECONET" to a
+"depends on ARCH_AIROHA" or equivalent line. If a new shared driver is
+needed, follow this same pattern rather than creating a new patch.
 
 Signed-off-by: Ahmed Naseef <naseefkm@gmail.com>
 Co-developed-by: Kervin Pursoty <kpursoty@proton.me>
@@ -14,18 +16,32 @@ Signed-off-by: Kervin Pursoty <kpursoty@proton.me>
 ---
 --- a/arch/mips/Kconfig
 +++ b/arch/mips/Kconfig
-@@ -391,6 +391,7 @@ config MACH_DECSTATION
+@@ -391,6 +391,7 @@
  config ECONET
  	bool "EcoNet MIPS family"
  	select BOOT_RAW
 +	select DMA_NONCOHERENT
+ 	select CPU_BIG_ENDIAN
  	select DEBUG_ZBOOT if DEBUG_KERNEL
  	select EARLY_PRINTK_8250
- 	select ECONET_EN751221_TIMER
+--- a/drivers/clk/Kconfig
++++ b/drivers/clk/Kconfig
+@@ -210,9 +210,9 @@
+ 	  If you say yes here you get support for the CS2000 clock multiplier.
+ 
+ config COMMON_CLK_EN7523
+-	bool "Clock driver for Airoha EN7523 SoC system clocks"
++	bool "Clock driver for Airoha/EcoNet SoC system clocks"
+ 	depends on OF
+-	depends on ARCH_AIROHA || COMPILE_TEST
++	depends on ARCH_AIROHA || ECONET || COMPILE_TEST
+ 	default ARCH_AIROHA
+ 	help
+ 	  This driver provides the fixed clocks and gates present on Airoha
 --- a/drivers/gpio/Kconfig
 +++ b/drivers/gpio/Kconfig
-@@ -271,7 +271,7 @@ config GPIO_EM
-
+@@ -271,7 +271,7 @@
+ 
  config GPIO_EN7523
  	tristate "Airoha GPIO support"
 -	depends on ARCH_AIROHA
@@ -43,10 +59,41 @@ Signed-off-by: Kervin Pursoty <kpursoty@proton.me>
 +	depends on ARCH_MEDIATEK || ARCH_AIROHA || SOC_MT7621 || SOC_MT7620 || ECONET || COMPILE_TEST
  	help
  	  If you have a Mediatek SoC with ethernet, say Y.
-
+ 
+--- a/drivers/pci/controller/Kconfig
++++ b/drivers/pci/controller/Kconfig
+@@ -187,7 +187,7 @@
+ 
+ config PCIE_MEDIATEK
+ 	tristate "MediaTek PCIe controller"
+-	depends on ARCH_AIROHA || ARCH_MEDIATEK || COMPILE_TEST
++	depends on ARCH_AIROHA || ARCH_MEDIATEK || ECONET || COMPILE_TEST
+ 	depends on OF
+ 	depends on PCI_MSI
+ 	help
+--- a/drivers/spi/Kconfig
++++ b/drivers/spi/Kconfig
+@@ -59,7 +59,7 @@
+ 
+ config SPI_AIROHA_SNFI
+ 	tristate "Airoha SPI NAND Flash Interface"
+-	depends on ARCH_AIROHA || COMPILE_TEST
++	depends on ARCH_AIROHA || ECONET || COMPILE_TEST
+ 	depends on SPI_MASTER
+ 	select REGMAP_MMIO
+ 	help
+@@ -372,7 +372,7 @@
+ 
+ config SPI_AIROHA_EN7523
+ 	bool "Airoha EN7523 SPI controller support"
+-	depends on ARCH_AIROHA
++	depends on ARCH_AIROHA || ECONET
+ 	help
+ 	  This enables SPI controller support for the Airoha EN7523 SoC.
+ 
 --- a/drivers/usb/host/Kconfig
 +++ b/drivers/usb/host/Kconfig
-@@ -71,7 +71,7 @@ config USB_XHCI_HISTB
+@@ -71,7 +71,7 @@
  config USB_XHCI_MTK
  	tristate "xHCI support for MediaTek SoCs"
  	select MFD_SYSCON
