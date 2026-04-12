@@ -185,6 +185,14 @@
 		reg-shift = <2>;
 
 		clock-frequency = <1843200>;
+		/*
+		 * procd's askconsole calls TIOCSCTTY with force=1, which
+		 * triggers uart_hangup() -> uart_shutdown() ->
+		 * serial_base_port_shutdown() -> serial_base_port_set_tx(false),
+		 * permanently silencing console TX. Opt in to the guard that
+		 * skips TX-disable on hangup for this console UART.
+		 */
+		keep-console-tx-on-hangup;
 	};
 
 	timer_hpt: timer@1fbf0400 {

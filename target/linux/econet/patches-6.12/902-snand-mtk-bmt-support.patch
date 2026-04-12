@@ -6,39 +6,51 @@ spinand_remove() so that the MediaTek Bad-block Management Table hooks
 into the SPI NAND MTD layer. Required for EN7528/EN751627 which
 reserve the top 8% of NAND blocks for the BMT region.
 
+The include and calls are guarded with CONFIG_MTD_NAND_MTK_BMT so that
+spinand/core.c does not gain a MediaTek-specific header on platforms
+where the BMT is not enabled.
+
 Signed-off-by: Ahmed Naseef <naseefkm@gmail.com>
 ---
 --- a/drivers/mtd/nand/spi/core.c
 +++ b/drivers/mtd/nand/spi/core.c
-@@ -19,6 +19,7 @@
+@@ -19,6 +19,9 @@
  #include <linux/string.h>
  #include <linux/spi/spi.h>
  #include <linux/spi/spi-mem.h>
++#ifdef CONFIG_MTD_NAND_MTK_BMT
 +#include <linux/mtd/mtk_bmt.h>
- 
++#endif
+
  static int spinand_read_reg_op(struct spinand_device *spinand, u8 reg, u8 *val)
  {
-@@ -1596,6 +1597,7 @@ static int spinand_probe(struct spi_mem
+@@ -1596,6 +1599,9 @@ static int spinand_probe(struct spi_mem
  	if (ret)
  		return ret;
- 
+
++#ifdef CONFIG_MTD_NAND_MTK_BMT
 +	mtk_bmt_attach(mtd);
++#endif
  	ret = mtd_device_register(mtd, NULL, 0);
  	if (ret)
  		goto err_spinand_cleanup;
-@@ -1603,6 +1605,7 @@ static int spinand_probe(struct spi_mem
+@@ -1603,6 +1609,9 @@ static int spinand_probe(struct spi_mem
  	return 0;
- 
+
  err_spinand_cleanup:
++#ifdef CONFIG_MTD_NAND_MTK_BMT
 +	mtk_bmt_detach(mtd);
++#endif
  	spinand_cleanup(spinand);
- 
+
  	return ret;
-@@ -1621,6 +1624,7 @@ static int spinand_remove(struct spi_mem
+@@ -1621,6 +1630,9 @@ static int spinand_remove(struct spi_mem
  	if (ret)
  		return ret;
- 
+
++#ifdef CONFIG_MTD_NAND_MTK_BMT
 +	mtk_bmt_detach(mtd);
++#endif
  	spinand_cleanup(spinand);
- 
+
  	return 0;

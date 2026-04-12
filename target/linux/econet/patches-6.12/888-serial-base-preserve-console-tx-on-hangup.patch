@@ -1,34 +1,39 @@
 From: Kervin Pursoty <kpursoty@proton.me>
-Subject: serial: base: preserve console TX on hangup
+Subject: serial: base: preserve console TX on hangup for opt-in ports
 
-Do not disable TX when hanging up a console port. When procd's
-askconsole fork calls TIOCSCTTY with force=1 the kernel hangs up the
-previous session, which triggers uart_hangup() -> uart_shutdown() ->
-serial_port_set_tx(false). Stopping TX silences all subsequent kernel
-console output permanently.
+When procd's askconsole fork calls TIOCSCTTY with force=1 the kernel
+hangs up the previous session, which triggers uart_hangup() ->
+uart_shutdown() -> serial_base_port_shutdown() ->
+serial_base_port_set_tx(false). Stopping TX silences all subsequent
+kernel console output permanently.
 
-uart_hangup() already skips uart_change_pm(PM_OFF) for console ports;
-apply the same guard here.
+Add an opt-in DT boolean property "keep-console-tx-on-hangup" that
+suppresses the TX-disable in serial_base_port_shutdown(). This keeps
+the change strictly per-device: no other platform or port type is
+affected unless they add the property.
+
+The EN751627 UART node sets this property because procd runs on that
+platform and the UART is always the system console.
 
 Signed-off-by: Kervin Pursoty <kpursoty@proton.me>
 ---
 --- a/drivers/tty/serial/serial_port.c
 +++ b/drivers/tty/serial/serial_port.c
-@@ -110,7 +110,16 @@
+@@ -109,6 +109,17 @@ void serial_base_port_startup(struct uart_port *port)
+ void serial_base_port_shutdown(struct uart_port *port)
  {
  	struct serial_port_device *port_dev = port->port_dev;
-
--	serial_base_port_set_tx(port, port_dev, false);
 +	/*
-+	 * Do not disable TX on a console port. When procd's askconsole fork
-+	 * calls TIOCSCTTY with force=1, the kernel hangs up the previous
-+	 * session, triggering uart_hangup() -> uart_shutdown() -> here.
-+	 * Stopping TX kills all kernel console output permanently.
-+	 * uart_hangup() already skips uart_change_pm(PM_OFF) for consoles;
-+	 * apply the same guard here.
++	 * If the device node opts in with "keep-console-tx-on-hangup",
++	 * do not disable TX on shutdown. This covers platforms (e.g.
++	 * EN751627) where procd askconsole calls TIOCSCTTY with force=1,
++	 * triggering uart_hangup() -> uart_shutdown() -> here, which
++	 * permanently silences the console. The property is opt-in so
++	 * no other platform is affected.
 +	 */
-+	if (!uart_console(port))
-+		serial_base_port_set_tx(port, port_dev, false);
- }
++	if (port->dev &&
++	    device_property_read_bool(port->dev, "keep-console-tx-on-hangup"))
++		return;
 
- static DEFINE_RUNTIME_DEV_PM_OPS(serial_port_pm,
+ 	serial_base_port_set_tx(port, port_dev, false);
+ }
