@@ -1,0 +1,264 @@
+// SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+/*
+ * Copyright (C) 2024 Kervin Pursoty <kpursoty@proton.me>
+ *
+ * ZyXEL EX3301-T0: EcoNet EN751627 (MIPS 1004Kc), AX1800 WiFi 6 DSL router.
+ * 256 MB RAM, 128 MB SPI NAND, MT7915+MT7916 WiFi, MT7530 switch, xHCI USB 3.0.
+ */
+
+#include "en751627.dtsi"
+
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/input/input.h>
+
+/ {
+	compatible = "zyxel,ex3301-t0", "econet,en751627";
+	model = "ZyXEL EX3301-T0";
+
+	aliases {
+		serial0 = &uart;
+		led-boot = &led_power;
+		led-failsafe = &led_power;
+		led-running = &led_power;
+		led-upgrade = &led_power;
+	};
+
+	chosen {
+		bootargs = "console=ttyS0,115200n8";
+		stdout-path = "serial0:115200n8";
+	};
+
+	memory@0 {
+		device_type = "memory";
+		reg = <0x00000000 0x10000000>;  /* 256 MB */
+	};
+
+	/*
+	 * Front-panel LEDs via SGPIO serial shift register (CR_SGPIO_DATA 0x1fbf0224).
+	 * 14-bit word, 7 dual-colour (R/G) LEDs, 2 bits each, LSB-first.
+	 * Requires "econet,en751627-sgpio-leds" driver (not yet upstream).
+	 */
+	leds: leds {
+		compatible = "econet,en751627-sgpio-leds";
+		econet,sgpio-data = <&sgpio_leds>;
+		status = "disabled";
+
+		led_power: power {
+			label = "green:power";
+			default-state = "on";
+		};
+
+		led_sync: sync {
+			label = "green:sync";
+		};
+
+		led_internet: internet {
+			label = "green:internet";
+		};
+
+		led_lan: lan {
+			label = "green:lan";
+		};
+
+		led_wifi24: wifi24 {
+			label = "green:wifi24";
+			linux,default-trigger = "phy0tpt";
+		};
+
+		led_wifi5g: wifi5g {
+			label = "green:wifi5g";
+			linux,default-trigger = "phy1tpt";
+		};
+
+		led_phone: phone {
+			label = "green:phone";
+		};
+	};
+
+	keys {
+		compatible = "gpio-keys-polled";
+		poll-interval = <100>;
+
+		reset {
+			label = "reset";
+			gpios = <&gpio0 0 GPIO_ACTIVE_LOW>;
+			linux,code = <KEY_RESTART>;
+		};
+
+		wps {
+			label = "wps";
+			gpios = <&gpio0 1 GPIO_ACTIVE_LOW>;
+			linux,code = <KEY_WPS_BUTTON>;
+		};
+	};
+};
+
+&uart {
+	status = "okay";
+};
+
+&spi_ctrl {
+	status = "okay";
+};
+
+&nand {
+	econet,bmt;
+	econet,enable-remap;
+	econet,can-write-factory-bbt;
+	econet,assert-reserve-size = <81>; /* 8% of 1024 blocks = 81 */
+	econet,bbt-table-size = <1000>;
+
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+		partition@0 {
+			label = "bootloader";
+			reg = <0x00000000 0x00040000>;
+			read-only;
+		};
+
+		partition@40000 {
+			label = "romfile";
+			reg = <0x00040000 0x00040000>;
+		};
+
+		partition@80000 {
+			label = "firmware";
+			reg = <0x00080000 0x02800000>;
+		};
+
+		partition@2880000 {
+			label = "firmware1";
+			reg = <0x02880000 0x02620000>;
+		};
+
+		partition@4ea0000 {
+			label = "wwan";
+			reg = <0x04ea0000 0x00100000>;
+		};
+
+		partition@4fa0000 {
+			/*
+			 * Stock label is "data" but kernel ubi_auto_attach()
+			 * probes any MTD named "ubi" or "data" for UBI magic.
+			 * Renamed to avoid benign but noisy UBI probe error.
+			 */
+			label = "nvdata";
+			reg = <0x04fa0000 0x00400000>;
+		};
+
+		partition@53a0000 {
+			label = "rom-d";
+			reg = <0x053a0000 0x00100000>;
+		};
+
+		partition@54a0000 {
+			/*
+			 * Persistent overlay storage (UBIFS on UBI).
+			 * Named "ubi" so the kernel ubi_auto_attach() probes and
+			 * attaches it automatically — no ubi.mtd= bootarg needed.
+			 * fstools/mount_root finds it as volume name "rootfs_data".
+			 */
+			label = "ubi";
+			reg = <0x054a0000 0x02000000>;
+		};
+
+		factory: partition@74a0000 {
+			label = "Factory";
+			reg = <0x074a0000 0x00080000>;
+			read-only;
+
+			nvmem-layout {
+				compatible = "fixed-layout";
+				#address-cells = <1>;
+				#size-cells = <1>;
+
+				eeprom_factory_0: eeprom@0 {
+					reg = <0x0 0x1000>;
+				};
+			};
+		};
+
+		partition@7520000 {
+			label = "reservearea";
+			reg = <0x07520000 0x000c0000>;
+		};
+	};
+};
+
+&ethernet {
+	status = "okay";
+};
+
+&gmac0 {
+	status = "okay";
+	mac-address = [ 48 ED E6 B6 5C F0 ];
+};
+
+&gmac1 {
+	status = "okay";
+	phy-mode = "rgmii-rxid";
+	mac-address = [ 48 ED E6 B6 5C F1 ];
+};
+
+&switch0 {
+	ports {
+		/* MT7530 port 4: WAN RJ45 — internal GbE PHY, auto-discovered */
+		port@4 {
+			reg = <4>;
+			label = "wan";
+			phy-mode = "gmii";
+
+			fixed-link {
+				speed = <1000>;
+				full-duplex;
+			};
+		};
+
+		/* MT7530 port 5: CPU port → gmac1 (eth1, WAN QDMA path) */
+		port@5 {
+			reg = <5>;
+			label = "cpu";
+			ethernet = <&gmac1>;
+			phy-mode = "rgmii-rxid";
+
+			fixed-link {
+				speed = <1000>;
+				full-duplex;
+			};
+		};
+	};
+};
+
+&usb {
+	status = "okay";
+};
+
+&pcie0 {
+	status = "okay";  /* 14C3:7915 — MT7915 5GHz WiFi 6 */
+};
+
+&pcie1 {
+	status = "okay";  /* 14C3:7916 — MT7916 5GHz WiFi 6 */
+};
+
+&slot0 {
+	wifi@0,0 {
+		compatible = "mediatek,mt76";
+		reg = <0x0000 0 0 0 0>;
+		/* big-endian: EEPROM on this SoC is stored BE; mt76 needs MTD path for swap */
+		mediatek,mtd-eeprom = <&factory 0x0>;
+		big-endian;
+	};
+};
+
+&slot1 {
+	wifi@0,0 {
+		compatible = "mediatek,mt76";
+		reg = <0x0000 0 0 0 0>;
+		mediatek,mtd-eeprom = <&factory 0x0>;
+		big-endian;
+	};
+};

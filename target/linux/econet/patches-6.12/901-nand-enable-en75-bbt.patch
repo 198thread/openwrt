@@ -1,4 +1,5 @@
-Subject: Add EcoNet bad block table
+From: Caleb James DeLisle <cjd@cjdns.fr>
+Subject: mtd: nand: econet: add EcoNet bad block table support
 
 The EcoNet BBT/BMT is used for resolving bad blocks in the flash.
 It is implemented in the EcoNet bootloader so you cannot safely

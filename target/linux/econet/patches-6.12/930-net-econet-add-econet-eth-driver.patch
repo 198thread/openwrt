@@ -1,0 +1,38 @@
+From: Kervin Pursoty <kpursoty@proton.me>
+Subject: net: econet: add EcoNet SoC Ethernet driver
+
+Add the EcoNet Ethernet driver supporting EN751221, EN751627, and EN7528
+SoCs. The driver supports 2 QDMA engines and 2 GDM ports with an
+internal MT7530 GbE switch operating in dumb-switch mode.
+
+EN751627 uses en751221_soc_data (big-endian, dscp_byte_swap=true) since
+both SoCs share the same FE/QDMA architecture.
+
+Driver originally by Caleb James DeLisle <cjd@cjdns.fr>.
+EN751627 support added by Kervin Pursoty <kpursoty@proton.me>.
+
+Signed-off-by: Kervin Pursoty <kpursoty@proton.me>
+---
+
+--- a/drivers/net/ethernet/Kconfig
++++ b/drivers/net/ethernet/Kconfig
+@@ -44,6 +44,7 @@
+ 	  To compile this driver as a module, choose M here. The module
+ 	  will be called ec_bhf.
+
++source "drivers/net/ethernet/econet/Kconfig"
+ source "drivers/net/ethernet/broadcom/Kconfig"
+ source "drivers/net/ethernet/cadence/Kconfig"
+ source "drivers/net/ethernet/calxeda/Kconfig"
+
+--- a/drivers/net/ethernet/Makefile
++++ b/drivers/net/ethernet/Makefile
+@@ -32,6 +32,7 @@
+ obj-$(CONFIG_NET_VENDOR_CIRRUS) += cirrus/
+ obj-$(CONFIG_NET_VENDOR_CISCO) += cisco/
+ obj-$(CONFIG_NET_VENDOR_CORTINA) += cortina/
+ obj-$(CONFIG_CX_ECAT) += ec_bhf.o
++obj-$(CONFIG_NET_ECONET)		+= econet/
+ obj-$(CONFIG_DM9000) += davicom/
+ obj-$(CONFIG_DNET) += dnet.o
+ obj-$(CONFIG_NET_VENDOR_DEC) += dec/

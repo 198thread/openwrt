@@ -1,0 +1,39 @@
+From: Kervin Pursoty <kpursoty@proton.me>
+Subject: serial: base: preserve console TX on hangup for opt-in ports
+
+When procd's askconsole fork calls TIOCSCTTY with force=1 the kernel
+hangs up the previous session, which triggers uart_hangup() ->
+uart_shutdown() -> serial_base_port_shutdown() ->
+serial_base_port_set_tx(false). Stopping TX silences all subsequent
+kernel console output permanently.
+
+Add an opt-in DT boolean property "keep-console-tx-on-hangup" that
+suppresses the TX-disable in serial_base_port_shutdown(). This keeps
+the change strictly per-device: no other platform or port type is
+affected unless they add the property.
+
+The EN751627 UART node sets this property because procd runs on that
+platform and the UART is always the system console.
+
+Signed-off-by: Kervin Pursoty <kpursoty@proton.me>
+---
+--- a/drivers/tty/serial/serial_port.c
++++ b/drivers/tty/serial/serial_port.c
+@@ -109,6 +109,17 @@ void serial_base_port_startup(struct uart_port *port)
+ void serial_base_port_shutdown(struct uart_port *port)
+ {
+ 	struct serial_port_device *port_dev = port->port_dev;
++	/*
++	 * If the device node opts in with "keep-console-tx-on-hangup",
++	 * do not disable TX on shutdown. This covers platforms (e.g.
++	 * EN751627) where procd askconsole calls TIOCSCTTY with force=1,
++	 * triggering uart_hangup() -> uart_shutdown() -> here, which
++	 * permanently silences the console. The property is opt-in so
++	 * no other platform is affected.
++	 */
++	if (port->dev &&
++	    device_property_read_bool(port->dev, "keep-console-tx-on-hangup"))
++		return;
+
+ 	serial_base_port_set_tx(port, port_dev, false);
+ }

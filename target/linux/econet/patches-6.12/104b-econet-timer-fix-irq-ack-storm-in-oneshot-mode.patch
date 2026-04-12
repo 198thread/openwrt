@@ -1,0 +1,33 @@
+From: Kervin Pursoty <kpursoty@proton.me>
+Subject: clocksource: timer-econet-en751221: fix IRQ ack storm in one-shot mode
+
+The interrupt handler acked by writing the current count back to compare:
+
+  iowrite32(ioread32(reg_count(cpu)), reg_compare(cpu));
+
+Since the interrupt fires when count >= compare, and the counter advances
+past the written value before the MMIO write reaches the peripheral, the
+condition re-asserts on the same bus cycle. This causes a tight IRQ storm
+on CPU0, stalling boot.
+
+The EcoNet GPL kernel (arch/mips/econet/time2.c, cputmr_timer_ack()) acks
+by writing the *next* deadline, which puts count < compare and clears the
+pending condition. For one-shot mode write U32_MAX (unreachable before
+set_next_event() programs the real deadline), consistent with the
+initialisation in cevt_dev_init() which also writes U32_MAX.
+
+Signed-off-by: Kervin Pursoty <kpursoty@proton.me>
+---
+--- a/drivers/clocksource/timer-econet-en751221.c
++++ b/drivers/clocksource/timer-econet-en751221.c
+@@ -85,7 +85,9 @@
+ 	if (!cevt_is_pending(cpu))
+ 		return IRQ_NONE;
+
+-	iowrite32(ioread32(reg_count(cpu)), reg_compare(cpu));
++	/* Ack: write a future value so count < compare, clearing the pending
++	 * condition. set_next_event() will program the real deadline. */
++	iowrite32(U32_MAX, reg_compare(cpu));
+ 	dev->event_handler(dev);
+ 	return IRQ_HANDLED;
+ }

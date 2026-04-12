@@ -6,7 +6,8 @@ set -e
 # This is not necessary, but it makes finding the rootfs easier.
 PAD_ROOTFS_OFFSET_TO=4194304
 
-# Constant
+# Default header length. ZyXEL ZHAL bootloaders require 372 (0x174);
+# other devices (e.g. EN7528/Dasan) use 256 (0x100). Pass --hdrlen to override.
 HDRLEN=256
 
 die() {
@@ -24,6 +25,7 @@ Options:
   --version  Version string, max 31 chars (required)
   --endian   Endianness: 'be' for big endian, 'le' for little endian (default: be)
   --model    Model/platform name, max 31 chars (default: empty)
+  --hdrlen   Header length in bytes: 256 (default) or 372 (ZyXEL ZHAL)
 EOF
     exit 1
 }
@@ -34,6 +36,7 @@ rootfs=""
 version=""
 endian="be"
 model=""
+chip=""
 
 # Parse named arguments
 while [ $# -gt 0 ]; do
@@ -56,6 +59,14 @@ while [ $# -gt 0 ]; do
             ;;
         --model)
             model="$2"
+            shift 2
+            ;;
+        --hdrlen)
+            HDRLEN="$2"
+            shift 2
+            ;;
+        --chip)
+            chip="$2"
             shift 2
             ;;
         -h|--help)
@@ -173,31 +184,86 @@ tclinux_trx_hdr() {
     # customer version
     head -c 32 /dev/zero | to_hex
 
-    # kernel length
+    # kernel length at 0x050
     hex32 "$kernel_len"
 
-    # rootfs length
-    hex32 "$padded_rootfs_len"
+    # flags at 0x054: upper16 = hdrlen, lower16 = part_count (4)
+    # Stock: 0x01740004. BL2 does not check this, but stock parsers do.
+    hex32 $(( ($HDRLEN << 16) | 4 ))
 
-    # romfile length (0)
+    # romfile length (0) at 0x058
     hex32 0
 
-    # model (32 bytes, zero-padded)
-    if [ -n "$model" ]; then
-        printf '%s' "$model" | to_hex
-        head -c "$((32 - $(printf '%s' "$model" | wc -c)))" /dev/zero | to_hex
+    # 32 zero bytes at 0x05c (boardinfo/reserved — stock has ASCII "35 122 0\n" here,
+    # but BL2 does not require it)
+    head -c 32 /dev/zero | to_hex
+
+    # Load address at 0x07c: 0 = use BL2 default 0x80020000 (matches stock)
+    hex32 0
+
+    # "reserved" 128 bytes of zeros  (bytes 0x80-0xFF)
+    head -c 128 /dev/zero | to_hex
+
+    # Extended header (bytes 0x100-0x173) required by ZyXEL ZHAL bootloader.
+    # Only written when --hdrlen 372 is specified; other devices use hdrlen=256.
+    [ "$HDRLEN" -lt 372 ] && return
+
+    # Chip/SoC ID string (16 bytes, zero-padded) at 0x100
+    # Must be the SoC chip model (e.g. "en7516"), NOT the device name.
+    # Stock mtd4-tclinux.bin has "en7516" here. BL2 does not check this field
+    # (ATDC disables model check), but stock parsers and ATUR validation may use it.
+    # Pass via --chip; fall back to empty if not provided.
+    if [ -n "$chip" ]; then
+        printf '%s' "$chip" | to_hex
+        head -c "$((16 - $(printf '%s' "$chip" | wc -c)))" /dev/zero | to_hex
     else
-        head -c 32 /dev/zero | to_hex
+        head -c 16 /dev/zero | to_hex
     fi
 
-    # Load address (CONFIG_ZBOOT_LOAD_ADDRESS)
-    hex32 0x80020000
+    # 8 zero bytes at 0x110
+    head -c 8 /dev/zero | to_hex
 
-    # "reserved" 128 bytes of zeros
-    head -c 128 /dev/zero | to_hex
+    # Flag word (build_date placeholder) at 0x118 — stock has 0x0405050d
+    # Use 0 here; BL2 does not validate this field
+    hex32 0
+
+    # slot_flag at 0x11c: 0 = slave/slot1 (we flash with ATUR,1), 1 = primary
+    # Stock mtd7 (slot1) has 0x00000000 here. We always produce slot1 images.
+    hex32 0
+
+    # 4 zero bytes padding at 0x120 (stock has 0x00000000 here before version)
+    hex32 0
+
+    # SW version string (28 bytes, zero-padded) at 0x124
+    # Stock version "V5.50(ABVY.4)C0" is 16 bytes; we use 28 to stay within field.
+    printf '%s' "$version" | to_hex
+    head -c "$((28 - $(printf '%s' "$version" | wc -c)))" /dev/zero | to_hex
+
+    # SW version repeated (28 bytes, zero-padded) at 0x140
+    printf '%s' "$version" | to_hex
+    head -c "$((28 - $(printf '%s' "$version" | wc -c)))" /dev/zero | to_hex
+
+    # 24 zero bytes at 0x15c..0x173 (JAMCRC placeholder at 0x170 patched later by python)
+    head -c 24 /dev/zero | to_hex
 }
 
-tclinux_trx_hdr | from_hex
-cat "$kernel"
-padding
-cat "$rootfs"
+# Build the image: header + kernel + padding + rootfs
+# Then patch offset 0x170 with JAMCRC of header bytes 0x000-0x173
+# (ZHAL bootloader validates this field before flashing)
+{
+    tclinux_trx_hdr | from_hex
+    cat "$kernel"
+    padding
+    cat "$rootfs"
+} | python3 -c "
+import sys, binascii, struct
+data = sys.stdin.buffer.read()
+hdrlen = struct.unpack('>I', data[4:8])[0]
+# Compute JAMCRC of header with checksum field zeroed (it already is)
+hdr_crc = binascii.crc32(data[:hdrlen]) & 0xFFFFFFFF
+jamcrc = hdr_crc ^ 0xFFFFFFFF
+# Write JAMCRC at offset 0x170 big-endian
+out = bytearray(data)
+struct.pack_into('>I', out, 0x170, jamcrc)
+sys.stdout.buffer.write(bytes(out))
+"

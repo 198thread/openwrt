@@ -7,7 +7,7 @@ include $(TOPDIR)/rules.mk
 BOARD:=econet
 BOARDNAME:=EcoNet EN75xx MIPS
 FEATURES:=dt source-only squashfs nand usb
-SUBTARGETS:=en751221 en7528
+SUBTARGETS:=en751221 en7528 en751627
 
 KERNEL_PATCHVER:=6.12
 
@@ -19,6 +19,12 @@ endef
 include $(INCLUDE_DIR)/target.mk
 
 # nand-utils is used by base-files/sbin/en75_chboot
-DEFAULT_PACKAGES += nand-utils kmod-econet-eth
+# kmod-econet-eth: out-of-tree driver, only for en751221/en7528 (which lack in-tree driver).
+# EN751627 uses the in-tree NET_ECONET driver (target/linux/econet/files/drivers/net/ethernet/econet/)
+# compiled as =y — loading the .ko would cause a double-registration error.
+ifneq ($(SUBTARGET),en751627)
+DEFAULT_PACKAGES += kmod-econet-eth
+endif
+DEFAULT_PACKAGES += nand-utils
 
 $(eval $(call BuildTarget))

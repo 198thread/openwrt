@@ -1,3 +1,12 @@
+From: Benjamin Larsson <benjamin.larsson@genexis.eu>
+Subject: serial: 8250: add Airoha EN7523 UART driver
+
+Add a platform driver for the Airoha EN7523 UART, a 16550-compatible
+core with non-standard baud rate registers. The driver provides a custom
+set_termios callback to program XYD and XINCLKDR registers.
+
+Signed-off-by: Benjamin Larsson <benjamin.larsson@genexis.eu>
+---
 --- /dev/null
 +++ b/drivers/tty/serial/8250/8250_en7523.c
 @@ -0,0 +1,94 @@
@@ -122,7 +131,7 @@
  };
  
  /* Uart divisor latch read */
-@@ -2841,6 +2849,12 @@ serial8250_do_set_termios(struct uart_po
+@@ -2835,6 +2843,12 @@ serial8250_do_set_termios(struct uart_po
  
  	serial8250_set_divisor(port, baud, quot, frac);
  

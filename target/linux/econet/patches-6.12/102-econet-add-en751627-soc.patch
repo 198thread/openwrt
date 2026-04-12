@@ -1,0 +1,55 @@
+From: Kervin Pursoty <kpursoty@proton.me>
+Subject: mips: econet: add EN751627 SoC Kconfig entry
+
+The EN751627 family (EN7516, EN7527, EN7561) is a big-endian quad-VPE
+MIPS 1004Kc SoC used in DSL/WiFi gateway devices such as the ZyXEL
+EX3301-T0. It shares the MIPS GIC interrupt controller with EN7528 but
+is big-endian and has four VPEs (NR_CPUS=4).
+
+Key differences from existing SoCs:
+- EN751221: BE, single-core 34Kc, custom INTC
+- EN7528:   LE, dual-core 1004Kc, MIPS GIC
+- EN751627: BE, quad-VPE 1004Kc, MIPS GIC
+
+The SMP plumbing (CM/CPC probe + CPS SMP ops) is shared with EN7528 and
+lives in patch 100 (device_tree_init). The earlycon timeout adjustment
+lives in patch 103 (prom_init). This patch adds only the Kconfig entry.
+
+Note: on EN751627, mips_cpc_probe() must be called before
+register_cps_smp_ops(). Without it, core 1 never comes online because
+write_gcr_co_reset_release(0) is insufficient on this SoC. This is
+different from EN7528 where CPC probe behaves identically. Both SoCs
+are covered by the shared #if in device_tree_init().
+
+Signed-off-by: Kervin Pursoty <kpursoty@proton.me>
+---
+--- a/arch/mips/econet/Kconfig
++++ b/arch/mips/econet/Kconfig
+@@ -41,5 +41,29 @@ choice
+ 		  The EN7528 family with dual-core MIPS 1004Kc.
+ 		  Requires MIPS_RAW_APPENDED_DTB=y for boot.
++
++	config SOC_ECONET_EN751627
++		bool "EN751627 family"
++		select COMMON_CLK
++		select CPU_BIG_ENDIAN
++		select HAVE_PCI
++		select IRQ_MIPS_CPU
++		select MIPS_CM
++		select MIPS_CPC
++		select MIPS_CPS
++		select MIPS_CPU_SCACHE
++		select MIPS_GIC
++		select MIPS_MT_SMP
++		select PCI_DRIVERS_GENERIC
++		select SMP
++		select SMP_UP
++		select SYS_SUPPORTS_HIGHMEM
++		select SYS_SUPPORTS_MIPS_CPS
++		select SYS_SUPPORTS_MULTITHREADING
++		select SYS_SUPPORTS_SMP
++		help
++		  The EN751627 family (EN7516, EN7527, EN7561) with big-endian
++		  quad-VPE MIPS 1004Kc and MIPS GIC. Used in DSL+WiFi gateways.
++		  Requires MIPS_RAW_APPENDED_DTB=y for boot.
+ endchoice

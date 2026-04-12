@@ -1,0 +1,52 @@
+From: Kervin Pursoty <kpursoty@proton.me>
+Subject: mips: early_printk_8250: poll THRE only, not TEMT
+
+prom_putchar() polls both THRE (bit 5, TX holding register empty) and
+TEMT (bit 6, TX shift register empty). On the Airoha EN7523 UART used
+in EcoNet EN751627 SoCs, TEMT is not reliably asserted between chars.
+
+With a finite timeout, prom_putchar() times out on TEMT and silently
+drops the character. Change to poll THRE only: THRE means the TX
+holding register is ready to accept the next byte, which is the correct
+condition for all MIPS 8250 UARTs.
+
+Also set the earlycon timeout to 10000 for EN751627 (in init.c prom_init)
+so prom_putchar does not skip the write. This is safe with THRE-only
+polling since TEMT is no longer the bottleneck.
+
+Signed-off-by: Kervin Pursoty <kpursoty@proton.me>
+---
+--- a/arch/mips/econet/init.c
++++ b/arch/mips/econet/init.c
+@@ -36,6 +36,15 @@
+ /* 1. Bring up early printk. */
+ void __init prom_init(void)
+ {
++#if defined(CONFIG_SOC_ECONET_EN751627)
++	/*
++	 * EN751627 (Airoha-family UART): use timeout=10000 so prom_putchar
++	 * does not skip the write. The THRE-only fix in early_printk_8250.c
++	 * ensures this timeout does not drop characters.
++	 */
++	setup_8250_early_printk_port(UART_BASE, UART_REG_SHIFT, 10000);
++#else
+ 	setup_8250_early_printk_port(UART_BASE, UART_REG_SHIFT, 0);
++#endif
+ 	_machine_restart = hw_reset;
+ }
+--- a/arch/mips/kernel/early_printk_8250.c
++++ b/arch/mips/kernel/early_printk_8250.c
+@@ -40,7 +40,12 @@
+ 		return;
+ 
+ 	timeout = serial8250_tx_timeout;
+-	bits = UART_LSR_TEMT | UART_LSR_THRE;
++	/*
++	 * Poll THRE (TX holding register empty) only. TEMT (shift register
++	 * empty, bit 6) is not reliable on all platforms (e.g. Airoha EN7523)
++	 * and polling it causes prom_putchar to drop characters on timeout.
++	 */
++	bits = UART_LSR_THRE;
+ 
+ 	do {
+ 		status = serial_in(UART_LSR);
