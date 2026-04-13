@@ -20,7 +20,7 @@ Signed-off-by: Kervin Pursoty <kpursoty@proton.me>
 ---
 --- a/drivers/clocksource/timer-econet-en751221.c
 +++ b/drivers/clocksource/timer-econet-en751221.c
-@@ -85,7 +85,9 @@
+@@ -85,7 +85,11 @@
  	if (!cevt_is_pending(cpu))
  		return IRQ_NONE;
 
