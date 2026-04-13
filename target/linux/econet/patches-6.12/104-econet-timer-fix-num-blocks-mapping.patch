@@ -21,6 +21,7 @@ is always 2, correctly mapping both register blocks regardless of how
 many VPEs are visible at early boot.
 
 Signed-off-by: Kervin Pursoty <kpursoty@proton.me>
+Reviewed-by: Caleb James DeLisle <cjd@cjdns.fr>
 --- a/drivers/clocksource/timer-econet-en751221.c
 +++ b/drivers/clocksource/timer-econet-en751221.c
 @@ -248,7 +248,6 @@
