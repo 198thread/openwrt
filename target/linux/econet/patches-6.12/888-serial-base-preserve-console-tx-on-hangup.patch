@@ -19,7 +19,7 @@ Signed-off-by: Kervin Pursoty <kpursoty@proton.me>
 ---
 --- a/drivers/tty/serial/serial_port.c
 +++ b/drivers/tty/serial/serial_port.c
-@@ -110,7 +110,16 @@
+@@ -110,5 +110,14 @@
  {
  	struct serial_port_device *port_dev = port->port_dev;
 
