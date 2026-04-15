@@ -1,19 +1,19 @@
 From: Kervin Pursoty <kpursoty@proton.me>
 Subject: mips: econet: add EN751627 SoC Kconfig entry
 
-The EN751627 family (EN7516, EN7527, EN7561) is a big-endian quad-VPE
-MIPS 1004Kc SoC used in DSL/WiFi gateway devices such as the ZyXEL
-EX3301-T0. It shares the MIPS GIC interrupt controller with EN7528 but
-is big-endian and has four VPEs (NR_CPUS=4).
+The EN751627 family (EN7516 DSL, EN7527 xPON) is a big-endian dual-core
+MIPS 1004Kc SoC (2 VPEs per core, NR_CPUS=4) used in DSL/WiFi gateway
+devices such as the ZyXEL EX3301-T0. It shares the MIPS GIC interrupt
+controller with EN7528 but is big-endian.
 
 Key differences from existing SoCs:
 - EN751221: BE, single-core 34Kc, custom INTC
 - EN7528:   LE, dual-core 1004Kc, MIPS GIC
-- EN751627: BE, quad-VPE 1004Kc, MIPS GIC
+- EN751627: BE, dual-core 2-VPE 1004Kc, MIPS GIC
 
 The SMP plumbing (CM/CPC probe + CPS SMP ops) is shared with EN7528 and
-lives in patch 100 (device_tree_init). The earlycon timeout adjustment
-lives in patch 103 (prom_init). This patch adds only the Kconfig entry.
+lives in patch 100 (device_tree_init). This patch adds only the Kconfig
+entry.
 
 Note: on EN751627, mips_cpc_probe() must be called before
 register_cps_smp_ops(). Without it, core 1 never comes online because
@@ -25,7 +25,7 @@ Signed-off-by: Kervin Pursoty <kpursoty@proton.me>
 ---
 --- a/arch/mips/econet/Kconfig
 +++ b/arch/mips/econet/Kconfig
-@@ -41,3 +41,27 @@ choice
+@@ -41,3 +41,28 @@ choice
  		  The EN7528 family with dual-core MIPS 1004Kc.
  		  Requires MIPS_RAW_APPENDED_DTB=y for boot.
 +
@@ -49,7 +49,7 @@ Signed-off-by: Kervin Pursoty <kpursoty@proton.me>
 +		select SYS_SUPPORTS_MULTITHREADING
 +		select SYS_SUPPORTS_SMP
 +		help
-+		  The EN751627 family (EN7516, EN7527, EN7561) with big-endian
-+		  quad-VPE MIPS 1004Kc and MIPS GIC. Used in DSL+WiFi gateways.
-+		  Requires MIPS_RAW_APPENDED_DTB=y for boot.
++		  The EN751627 family (EN7516 DSL, EN7527 xPON) with big-endian
++		  dual-core, 2-VPE-per-core MIPS 1004Kc and MIPS GIC. Used in
++		  DSL+WiFi gateways. Requires MIPS_RAW_APPENDED_DTB=y for boot.
  endchoice
