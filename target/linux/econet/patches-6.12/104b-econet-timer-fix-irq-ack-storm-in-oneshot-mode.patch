@@ -17,6 +17,7 @@ set_next_event() programs the real deadline), consistent with the
 initialisation in cevt_dev_init() which also writes U32_MAX.
 
 Signed-off-by: Kervin Pursoty <kpursoty@proton.me>
+Tested-by: Caleb James DeLisle <cjd@cjdns.fr>
 ---
 --- a/drivers/clocksource/timer-econet-en751221.c
 +++ b/drivers/clocksource/timer-econet-en751221.c
