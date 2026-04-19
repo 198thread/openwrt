@@ -2,7 +2,9 @@
 
 > **EcoNet EN751627 · MIPS 1004Kc · 256 MB RAM · 128 MB SPI NAND · MT7530 DSA · MT7915/MT7916 WiFi**
 
-> The port itself and the release artifacts (firmware image, install guide, boot log, LuCI screenshot) live on the **`target/econet-zyxel-ex3301-t0`** branch of this fork. Switch to that branch to see the files referenced below.
+> The port itself and the release artifacts (firmware image, install guide, boot log) live on the **`target/econet-zyxel-ex3301-t0`** branch of this fork. Switch to that branch to see the files referenced below.
+
+![LuCI system overview](ex3301-luci-overview.png)
 
 ## Working
 
@@ -20,8 +22,6 @@
 Boot log (BL2 → kernel → procd): switch to the `target/econet-zyxel-ex3301-t0` branch, then open `releases/zyxel-ex3301-t0/boot.log`.
 
 Flash and install instructions: switch to the `target/econet-zyxel-ex3301-t0` branch, then open `releases/zyxel-ex3301-t0/INSTALL.md`.
-
-LuCI system overview screenshot: switch to the `target/econet-zyxel-ex3301-t0` branch, then open `releases/zyxel-ex3301-t0/luci-overview.png`.
 
 ---
 
