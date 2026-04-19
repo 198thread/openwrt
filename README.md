@@ -1,3 +1,30 @@
+# ZyXEL EX3301-T0 — OpenWrt port
+
+> **EcoNet EN751627 · MIPS 1004Kc · 256 MB RAM · 128 MB SPI NAND · MT7530 DSA · MT7915/MT7916 WiFi**
+
+> The port itself and the release artifacts (firmware image, install guide, boot log, LuCI screenshot) live on the **`target/econet-zyxel-ex3301-t0`** branch of this fork. Switch to that branch to see the files referenced below.
+
+## Working
+
+| Component | Status |
+|-----------|--------|
+| CPU (4× MIPS 1004Kc VPEs, 2 cores) | Online |
+| RAM (256 MB DDR3) | OK |
+| NAND (128 MB, Winbond W25N01G) | OK — 10 partitions, UBIFS overlay |
+| LAN 1–4 (MT7530 DSA, Gigabit) | UP |
+| WiFi 2.4 GHz (MT7915, PCIe) | Enumerated |
+| WiFi 5 GHz (MT7916, PCIe) | Enumerated |
+| USB (xHCI) | Controller up |
+| SSH / LuCI | Working |
+
+Boot log (BL2 → kernel → procd): switch to the `target/econet-zyxel-ex3301-t0` branch, then open `releases/zyxel-ex3301-t0/boot.log`.
+
+Flash and install instructions: switch to the `target/econet-zyxel-ex3301-t0` branch, then open `releases/zyxel-ex3301-t0/INSTALL.md`.
+
+LuCI system overview screenshot: switch to the `target/econet-zyxel-ex3301-t0` branch, then open `releases/zyxel-ex3301-t0/luci-overview.png`.
+
+---
+
 ![OpenWrt logo](include/logo.png)
 
 OpenWrt Project is a Linux operating system targeting embedded devices. Instead
