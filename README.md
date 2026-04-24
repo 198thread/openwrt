@@ -19,8 +19,6 @@
 
 Boot log (BL2 → kernel → procd): [`releases/zyxel-ex3301-t0/boot.log`](releases/zyxel-ex3301-t0/boot.log)
 
-Flash and install instructions: [`releases/zyxel-ex3301-t0/INSTALL.md`](releases/zyxel-ex3301-t0/INSTALL.md)
-
 ---
 
 ![OpenWrt logo](include/logo.png)
